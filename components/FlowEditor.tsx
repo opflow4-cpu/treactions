@@ -29,20 +29,22 @@ import {
 import {
   Flow, FlowBlock, BlockType, ButtonsBlock, ButtonOption, ButtonActionType, ButtonAction,
   BLOCK_META, ACTION_META, blockSummary, createBlock, resolveAction, defaultAction,
-  TriggerBlock, TextBlock, ImageBlock, VideoBlock, AudioBlock, DelayBlock,
+  TriggerBlock, TextBlock, ImageBlock, VideoBlock, AudioBlock, DocumentBlock, DelayBlock,
 } from '@/lib/flow-types';
+import MediaUploadField from './MediaUploadField';
 import { Bot } from '@/lib/types';
 
 // ── Neon tokens ───────────────────────────────────────────────────────────────
 
 const NEON: Record<BlockType, { hex: string; minimap: string }> = {
-  trigger: { hex: '#f59e0b', minimap: '#d97706' },
-  text:    { hex: '#3b82f6', minimap: '#2563eb' },
-  image:   { hex: '#8b5cf6', minimap: '#7c3aed' },
-  video:   { hex: '#ec4899', minimap: '#db2777' },
-  audio:   { hex: '#f97316', minimap: '#ea580c' },
-  buttons: { hex: '#10b981', minimap: '#059669' },
-  delay:   { hex: '#64748b', minimap: '#475569' },
+  trigger:  { hex: '#f59e0b', minimap: '#d97706' },
+  text:     { hex: '#3b82f6', minimap: '#2563eb' },
+  image:    { hex: '#8b5cf6', minimap: '#7c3aed' },
+  video:    { hex: '#ec4899', minimap: '#db2777' },
+  audio:    { hex: '#f97316', minimap: '#ea580c' },
+  document: { hex: '#14b8a6', minimap: '#0d9488' },
+  buttons:  { hex: '#10b981', minimap: '#059669' },
+  delay:    { hex: '#64748b', minimap: '#475569' },
 };
 
 // ── Editor context (shared callbacks, avoids functions in edge data) ───────────
@@ -187,31 +189,6 @@ function TextEditor({ block, onChange }: { block: TextBlock; onChange: (b: TextB
   );
 }
 
-function MediaEditor({ block, onChange }: {
-  block: ImageBlock | VideoBlock | AudioBlock;
-  onChange: (b: ImageBlock | VideoBlock | AudioBlock) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="block text-xs text-gray-400 mb-1.5">URL do arquivo</label>
-        <input type="url" value={block.url}
-          onChange={(e) => onChange({ ...block, url: e.target.value } as typeof block)}
-          placeholder="https://…"
-          className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-violet-500/60" />
-      </div>
-      {block.type !== 'audio' && (
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5">Legenda (opcional)</label>
-          <input type="text" value={(block as ImageBlock | VideoBlock).caption}
-            onChange={(e) => onChange({ ...block, caption: e.target.value } as ImageBlock | VideoBlock)}
-            placeholder="Legenda…"
-            className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/60" />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── ButtonsEditor — rich action editor ───────────────────────────────────────
 
@@ -642,7 +619,7 @@ const edgeTypes = { flowEdge: FlowEdge };
 
 // ── Block palette sidebar ─────────────────────────────────────────────────────
 
-const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'image', 'video', 'audio', 'buttons', 'delay'];
+const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'image', 'video', 'audio', 'document', 'buttons', 'delay'];
 
 function BlockPalette({ onAdd, collapsed, onToggle }: { onAdd: (t: BlockType) => void; collapsed: boolean; onToggle: () => void }) {
   return (
@@ -708,8 +685,39 @@ function NodeInspector({ block, onUpdate, onDelete, onClose, flows }: {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {block.type === 'trigger' && <TriggerEditor block={block} onChange={(b) => onUpdate(b)} />}
         {block.type === 'text'    && <TextEditor    block={block} onChange={(b) => onUpdate(b)} />}
-        {(block.type === 'image' || block.type === 'video' || block.type === 'audio') && (
-          <MediaEditor block={block} onChange={(b) => onUpdate(b)} />
+        {block.type === 'image' && (
+          <MediaUploadField
+            kind="image"
+            url={(block as ImageBlock).url}
+            caption={(block as ImageBlock).caption}
+            onUrlChange={(u) => onUpdate({ ...(block as ImageBlock), url: u })}
+            onCaptionChange={(c) => onUpdate({ ...(block as ImageBlock), caption: c })}
+          />
+        )}
+        {block.type === 'video' && (
+          <MediaUploadField
+            kind="video"
+            url={(block as VideoBlock).url}
+            caption={(block as VideoBlock).caption}
+            onUrlChange={(u) => onUpdate({ ...(block as VideoBlock), url: u })}
+            onCaptionChange={(c) => onUpdate({ ...(block as VideoBlock), caption: c })}
+          />
+        )}
+        {block.type === 'audio' && (
+          <MediaUploadField
+            kind="audio"
+            url={(block as AudioBlock).url}
+            onUrlChange={(u) => onUpdate({ ...(block as AudioBlock), url: u })}
+          />
+        )}
+        {block.type === 'document' && (
+          <MediaUploadField
+            kind="file"
+            url={(block as DocumentBlock).url}
+            caption={(block as DocumentBlock).caption}
+            onUrlChange={(u) => onUpdate({ ...(block as DocumentBlock), url: u })}
+            onCaptionChange={(c) => onUpdate({ ...(block as DocumentBlock), caption: c })}
+          />
         )}
         {block.type === 'buttons' && (
           <ButtonsEditor

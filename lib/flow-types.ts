@@ -4,6 +4,7 @@ export type BlockType =
   | 'image'
   | 'video'
   | 'audio'
+  | 'document'
   | 'buttons'
   | 'delay';
 
@@ -84,6 +85,13 @@ export interface AudioBlock {
   url: string;
 }
 
+export interface DocumentBlock {
+  id: string;
+  type: 'document';
+  url: string;
+  caption: string;
+}
+
 export interface ButtonOption {
   id: string;
   label: string;
@@ -112,6 +120,7 @@ export type FlowBlock =
   | ImageBlock
   | VideoBlock
   | AudioBlock
+  | DocumentBlock
   | ButtonsBlock
   | DelayBlock;
 
@@ -163,6 +172,12 @@ export const BLOCK_META: Record<
     description: 'Envia um arquivo de áudio',
     color: 'text-orange-400',
   },
+  document: {
+    icon: '📎',
+    label: 'Arquivo',
+    description: 'Envia um documento ou arquivo',
+    color: 'text-teal-400',
+  },
   buttons: {
     icon: '🔘',
     label: 'Botões',
@@ -190,6 +205,8 @@ export function blockSummary(block: FlowBlock): string {
       return block.url ? block.url.slice(0, 48) + '…' : 'sem URL';
     case 'audio':
       return block.url ? block.url.slice(0, 48) + '…' : 'sem URL';
+    case 'document':
+      return block.url ? (block.caption || block.url.split('/').pop() || block.url.slice(0, 48)) : 'sem arquivo';
     case 'buttons':
       return `${block.buttons.length} botão(ões)${block.text ? ' — ' + block.text.slice(0, 30) : ''}`;
     case 'delay':
@@ -205,6 +222,7 @@ export function createBlock(type: BlockType): FlowBlock {
     case 'image':    return { id, type: 'image', url: '', caption: '' };
     case 'video':    return { id, type: 'video', url: '', caption: '' };
     case 'audio':    return { id, type: 'audio', url: '' };
+    case 'document': return { id, type: 'document', url: '', caption: '' };
     case 'buttons':  return {
       id, type: 'buttons', text: '',
       buttons: [{ id: `btn_${Date.now()}`, label: '', action: { type: 'url', url: '' } }],

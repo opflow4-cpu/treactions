@@ -42,6 +42,10 @@ async function execBlock(token: string, chatId: number, block: FlowBlock, flow: 
       if (block.url) await sendAudio(token, chatId, block.url);
       return 'continue';
 
+    case 'document':
+      if (block.url) await sendDocument(token, chatId, block.url, block.caption || undefined);
+      return 'continue';
+
     case 'delay': {
       const ms = Math.min(block.seconds * 1000, 25_000); // cap at 25s (serverless limit)
       await new Promise((r) => setTimeout(r, ms));
