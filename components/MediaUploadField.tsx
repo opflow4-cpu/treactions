@@ -19,12 +19,11 @@ interface Props {
 }
 
 export default function MediaUploadField({ kind, url, caption, onUrlChange, onCaptionChange }: Props) {
-  const [progress, setProgress]   = useState(0);
   const [uploading, setUploading] = useState(false);
   const [error, setError]         = useState('');
   const [dragOver, setDragOver]   = useState(false);
   const fileRef                   = useRef<HTMLInputElement>(null);
-  const xhrRef                    = useRef<XMLHttpRequest | null>(null);
+  const abortRef                  = useRef<AbortController | null>(null);
 
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const preset    = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -44,70 +43,59 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
     return null;
   }
 
-  function doUpload(file: File) {
+  async function doUpload(file: File) {
     const validationErr = validate(file);
     if (validationErr) { setError(validationErr); return; }
 
     setError('');
     setUploading(true);
-    setProgress(0);
 
     const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
-    console.log('[MediaUpload] cloud_name:', cloudName);
-    console.log('[MediaUpload] upload_preset:', preset);
-    console.log('[MediaUpload] url:', uploadUrl);
-    console.log('[MediaUpload] file:', file.name, file.type, file.size);
 
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('upload_preset', preset!);
+    console.log('[MediaUpload] cloud_name :', cloudName);
+    console.log('[MediaUpload] preset     :', preset);
+    console.log('[MediaUpload] url        :', uploadUrl);
+    console.log('[MediaUpload] file       :', file.name, file.type, `${(file.size / 1024).toFixed(1)} KB`);
 
-    const xhr = new XMLHttpRequest();
-    xhrRef.current = xhr;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', preset!);
 
-    xhr.upload.addEventListener('progress', (e) => {
-      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-    });
+    // Log FormData keys to confirm nothing extra is attached
+    console.log('[MediaUpload] FormData keys:', [...formData.keys()]);
 
-    xhr.addEventListener('load', () => {
-      setUploading(false);
-      xhrRef.current = null;
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText) as { secure_url: string };
-          onUrlChange(data.secure_url);
-          setProgress(100);
-        } catch {
-          setError('Resposta inválida do servidor de upload.');
-          setProgress(0);
-        }
-      } else {
-        console.error('[MediaUpload] upload failed, status:', xhr.status, 'body:', xhr.responseText);
-        try {
-          const body = JSON.parse(xhr.responseText) as { error?: { message: string } };
-          setError(body.error?.message ?? `Erro ${xhr.status}`);
-        } catch {
-          setError(`Erro ${xhr.status}`);
-        }
-        setProgress(0);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+
+      const data = await res.json() as { secure_url?: string; error?: { message: string } };
+
+      if (!res.ok) {
+        console.error('[MediaUpload] error response:', data);
+        setError(data.error?.message ?? `Erro ${res.status}`);
+        return;
       }
-    });
 
-    xhr.addEventListener('error', () => {
-      setUploading(false);
-      xhrRef.current = null;
+      if (!data.secure_url) {
+        setError('Cloudinary não retornou URL. Verifique o preset.');
+        return;
+      }
+
+      onUrlChange(data.secure_url);
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      console.error('[MediaUpload] fetch error:', err);
       setError('Falha na conexão. Verifique sua internet.');
-      setProgress(0);
-    });
-
-    xhr.addEventListener('abort', () => {
+    } finally {
       setUploading(false);
-      xhrRef.current = null;
-      setProgress(0);
-    });
-
-    xhr.open('POST', uploadUrl);
-    xhr.send(fd);
+      abortRef.current = null;
+    }
   }
 
   const handleFiles = (files: FileList | null) => {
@@ -115,8 +103,8 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
     doUpload(files[0]);
   };
 
-  const cancel = () => xhrRef.current?.abort();
-  const clear  = () => { onUrlChange(''); setProgress(0); setError(''); };
+  const cancel = () => abortRef.current?.abort();
+  const clear  = () => { onUrlChange(''); setError(''); };
 
   const filename = url
     ? decodeURIComponent(url.split('/').pop()?.split('?')[0] ?? '')
@@ -125,14 +113,14 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
   return (
     <div className="space-y-3">
 
-      {/* Progress bar ─────────────────────────────────────────────────── */}
+      {/* Uploading indicator ──────────────────────────────────────────── */}
       {uploading && (
         <div
           className="rounded-xl px-3 py-3"
           style={{ border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.05)' }}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-indigo-300 font-medium">Enviando… {progress}%</span>
+            <span className="text-xs text-indigo-300 font-medium">Enviando…</span>
             <button
               type="button"
               onClick={cancel}
@@ -141,18 +129,26 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
               Cancelar
             </button>
           </div>
+          {/* Indeterminate bar — fetch doesn't expose upload bytes */}
           <div
             className="rounded-full overflow-hidden"
             style={{ height: 4, background: 'rgba(255,255,255,0.07)' }}
           >
             <div
-              className="h-full rounded-full transition-all duration-200"
+              className="h-full rounded-full"
               style={{
-                width: `${progress}%`,
+                width: '40%',
                 background: 'linear-gradient(90deg, #4f46e5, #7c3aed)',
+                animation: 'mediaUploadSlide 1.2s ease-in-out infinite alternate',
               }}
             />
           </div>
+          <style>{`
+            @keyframes mediaUploadSlide {
+              from { margin-left: 0%; }
+              to   { margin-left: 60%; }
+            }
+          `}</style>
         </div>
       )}
 
