@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Alex\\\\TReactions\" -Recurse -Force)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(Sort-Object FullName)",
+      "Bash(find \"C:/Users/Alex\" -maxdepth 2 -name \"TReactions*\" -o -name \"*telegram*\" -o -name \"*reactions*\" 2>/dev/null | head -20)"
+    ]
+  }
+}
