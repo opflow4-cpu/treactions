@@ -4,14 +4,10 @@ import { getMe } from '@/lib/telegram';
 import { Bot } from '@/lib/types';
 
 export async function GET() {
-  try {
-    const bots = await getBots();
-    console.log(`[GET /api/bots] returning ${bots.length} bots`);
-    return NextResponse.json(bots);
-  } catch (err) {
-    console.error('[GET /api/bots] storage error:', err);
-    return NextResponse.json({ error: 'Falha ao ler bots do storage' }, { status: 500 });
-  }
+  // getBots() never throws — it returns [] on any storage error
+  const bots = await getBots();
+  console.log(`[GET /api/bots] returning ${bots.length} bot(s)`);
+  return NextResponse.json(bots);
 }
 
 export async function POST(req: NextRequest) {
