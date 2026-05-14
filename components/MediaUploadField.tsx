@@ -24,8 +24,17 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
   const [uploading, setUploading] = useState(false);
   const [error, setError]         = useState('');
   const [dragOver, setDragOver]   = useState(false);
-  const fileRef                   = useRef<HTMLInputElement>(null);
-  const abortRef                  = useRef<AbortController | null>(null);
+  const [debugLog, setDebugLog]   = useState<{
+    cloudName: string | undefined;
+    preset: string | undefined;
+    endpoint: string;
+    formDataKeys: string[];
+    formDataValues: Record<string, string>;
+    status: string;
+    response: string | null;
+  } | null>(null);
+  const fileRef  = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const preset    = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -51,18 +60,38 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
 
     setError('');
     setUploading(true);
+    setDebugLog(null);
 
-    // Unsigned uploads only work on resource-type specific endpoints.
     const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${cfg.endpoint}/upload`;
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', preset!);
 
-    console.log('[MediaUpload] endpoint    :', uploadUrl);
-    console.log('[MediaUpload] preset      :', preset);
-    console.log('[MediaUpload] FormData keys:', [...formData.keys()]); // must be: ['file', 'upload_preset']
-    console.log('[MediaUpload] file        :', file.name, file.type, `${(file.size / 1024).toFixed(1)} KB`);
+    // Confirm exactly what is being sent — must be ONLY these two keys
+    const fdKeys = [...formData.keys()];
+    const fdEntries: Record<string, string> = {};
+    for (const [k, v] of formData.entries()) {
+      fdEntries[k] = v instanceof File ? `[File: ${v.name} ${v.type} ${(v.size/1024).toFixed(1)}KB]` : String(v);
+    }
+
+    const debugInfo = {
+      cloudName,
+      preset,
+      endpoint: uploadUrl,
+      formDataKeys: fdKeys,
+      formDataValues: fdEntries,
+    };
+
+    console.group('[MediaUpload] DEBUG');
+    console.log('cloudName     :', cloudName);
+    console.log('preset        :', preset);
+    console.log('endpoint      :', uploadUrl);
+    console.log('FormData keys :', fdKeys);
+    console.log('FormData entries:', fdEntries);
+    console.groupEnd();
+
+    setDebugLog({ ...debugInfo, status: 'sending…', response: null });
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -74,20 +103,27 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
         signal: controller.signal,
       });
 
-      const data = await res.json() as { secure_url?: string; error?: { message: string } };
+      const rawText = await res.text();
+      console.log('[MediaUpload] HTTP status :', res.status);
+      console.log('[MediaUpload] raw response:', rawText);
+
+      let data: { secure_url?: string; error?: { message: string } };
+      try { data = JSON.parse(rawText); } catch { data = {}; }
+
+      setDebugLog((d) => d ? { ...d, status: `HTTP ${res.status}`, response: rawText } : d);
 
       if (!res.ok) {
-        console.error('[MediaUpload] error response:', data);
-        setError(data.error?.message ?? `Erro ${res.status}`);
+        setError(data.error?.message ?? `Erro ${res.status} — veja o console para detalhes`);
         return;
       }
 
       if (!data.secure_url) {
-        setError('Cloudinary não retornou URL. Verifique o preset.');
+        setError('Cloudinary não retornou secure_url. Veja console.');
         return;
       }
 
       onUrlChange(data.secure_url);
+      setDebugLog(null);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       console.error('[MediaUpload] fetch error:', err);
@@ -310,6 +346,70 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
           />
         </div>
       )}
+
+      {/* DEBUG panel ──────────────────────────────────────────────────── */}
+      <details
+        open
+        className="rounded-lg overflow-hidden text-[10px] font-mono"
+        style={{ border: '1px solid rgba(99,102,241,0.2)', background: 'rgba(10,12,22,0.8)' }}
+      >
+        <summary className="px-3 py-1.5 cursor-pointer text-indigo-400 select-none">
+          🔍 DEBUG — Cloudinary config
+        </summary>
+        <div className="px-3 pb-3 pt-1 space-y-1 text-gray-400 leading-relaxed">
+          <div>
+            <span className="text-gray-600">cloudName  : </span>
+            <span className={cloudName ? 'text-emerald-400' : 'text-red-400'}>
+              {cloudName ?? '⚠ undefined (NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME não carregado)'}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-600">preset     : </span>
+            <span className={preset ? 'text-emerald-400' : 'text-red-400'}>
+              {preset ?? '⚠ undefined (NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET não carregado)'}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-600">endpoint   : </span>
+            <span className="text-blue-300">
+              {cloudName
+                ? `https://api.cloudinary.com/v1_1/${cloudName}/${cfg.endpoint}/upload`
+                : '(aguardando cloudName)'}
+            </span>
+          </div>
+
+          {debugLog && (
+            <>
+              <div className="mt-1 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <span className="text-gray-600">status     : </span>
+                <span className={debugLog.status.includes('200') ? 'text-emerald-400' : 'text-yellow-400'}>
+                  {debugLog.status}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-600">fd keys    : </span>
+                <span className={
+                  JSON.stringify(debugLog.formDataKeys) === '["file","upload_preset"]'
+                    ? 'text-emerald-400' : 'text-red-400'
+                }>
+                  {JSON.stringify(debugLog.formDataKeys)}
+                </span>
+              </div>
+              {debugLog.response && (
+                <div className="mt-1">
+                  <span className="text-gray-600">response   :</span>
+                  <pre
+                    className="mt-1 text-red-300 whitespace-pre-wrap break-all"
+                    style={{ maxHeight: 120, overflowY: 'auto' }}
+                  >
+                    {debugLog.response}
+                  </pre>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
