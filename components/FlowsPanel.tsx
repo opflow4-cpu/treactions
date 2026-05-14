@@ -144,6 +144,7 @@ export default function FlowsPanel({ bots }: Props) {
       <FlowEditor
         flow={editing}
         bots={bots}
+        flows={flows}
         onBack={handleBack}
         onSaved={handleSaved}
       />

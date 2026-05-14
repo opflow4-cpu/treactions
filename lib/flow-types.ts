@@ -7,6 +7,48 @@ export type BlockType =
   | 'buttons'
   | 'delay';
 
+// ── Button action system ──────────────────────────────────────────────────────
+
+export type ButtonActionType =
+  | 'url'
+  | 'next_message'
+  | 'custom_message'
+  | 'send_media'
+  | 'add_tag'
+  | 'goto_flow'
+  | 'dismiss';
+
+export interface ButtonAction {
+  type: ButtonActionType;
+  url?: string;                                         // url
+  message?: string;                                     // custom_message
+  mediaUrl?: string;                                    // send_media
+  mediaType?: 'image' | 'video' | 'audio' | 'file';   // send_media
+  tag?: string;                                         // add_tag
+  flowId?: string;                                      // goto_flow
+}
+
+export function defaultAction(): ButtonAction {
+  return { type: 'url', url: '' };
+}
+
+/** Resolve action for a button — handles legacy buttons that only had `url` field */
+export function resolveAction(btn: ButtonOption): ButtonAction {
+  if (btn.action) return btn.action;
+  if (btn.url) return { type: 'url', url: btn.url };
+  return defaultAction();
+}
+
+export const ACTION_META: Record<ButtonActionType, { icon: string; label: string; color: string; hex: string }> = {
+  url:            { icon: '🔗', label: 'URL',            color: 'text-blue-400',    hex: '#3b82f6' },
+  next_message:   { icon: '→',  label: 'Próximo bloco',  color: 'text-indigo-400',  hex: '#6366f1' },
+  custom_message: { icon: '💬', label: 'Mensagem',       color: 'text-emerald-400', hex: '#10b981' },
+  send_media:     { icon: '📎', label: 'Mídia',          color: 'text-violet-400',  hex: '#8b5cf6' },
+  add_tag:        { icon: '🏷', label: 'Adicionar tag',  color: 'text-amber-400',   hex: '#f59e0b' },
+  goto_flow:      { icon: '↗',  label: 'Ir para fluxo',  color: 'text-pink-400',    hex: '#ec4899' },
+  dismiss:        { icon: '✕',  label: 'Sumir',          color: 'text-gray-400',    hex: '#6b7280' },
+};
+
 // ── Individual block shapes ───────────────────────────────────────────────────
 
 export interface TriggerBlock {
@@ -45,7 +87,8 @@ export interface AudioBlock {
 export interface ButtonOption {
   id: string;
   label: string;
-  url: string;
+  url?: string;           // legacy field — kept for backward compat
+  action: ButtonAction;   // new — use resolveAction() to read
 }
 
 export interface ButtonsBlock {
@@ -53,6 +96,8 @@ export interface ButtonsBlock {
   type: 'buttons';
   text: string;
   buttons: ButtonOption[];
+  /** buttonId → targetBlockId — populated from canvas edges */
+  branching: { [buttonId: string]: string };
 }
 
 export interface DelayBlock {
@@ -121,7 +166,7 @@ export const BLOCK_META: Record<
   buttons: {
     icon: '🔘',
     label: 'Botões',
-    description: 'Mensagem com botões inline clicáveis',
+    description: 'Mensagem com botões de ação',
     color: 'text-emerald-400',
   },
   delay: {
@@ -162,7 +207,8 @@ export function createBlock(type: BlockType): FlowBlock {
     case 'audio':    return { id, type: 'audio', url: '' };
     case 'buttons':  return {
       id, type: 'buttons', text: '',
-      buttons: [{ id: `btn_${Date.now()}`, label: '', url: '' }],
+      buttons: [{ id: `btn_${Date.now()}`, label: '', action: { type: 'url', url: '' } }],
+      branching: {},
     };
     case 'delay':    return { id, type: 'delay', seconds: 5 };
   }
