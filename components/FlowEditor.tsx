@@ -1,6 +1,6 @@
 'use client';
 import '@xyflow/react/dist/style.css';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useContext, createContext, useEffect } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -15,9 +15,9 @@ import {
   Position,
   BackgroundVariant,
   Panel,
-  BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  MarkerType,
   type Node,
   type Edge,
   type Connection,
@@ -32,34 +32,42 @@ import {
 } from '@/lib/flow-types';
 import { Bot } from '@/lib/types';
 
-// ── Neon color tokens ─────────────────────────────────────────────────────────
+// ── Neon tokens ───────────────────────────────────────────────────────────────
 
-const NEON: Record<BlockType, {
-  border: string; headerBg: string; accent: string; hex: string; minimap: string;
-}> = {
-  trigger: { border: 'border-yellow-500/60', headerBg: 'bg-yellow-950/60', accent: 'text-yellow-400', hex: '#eab308', minimap: '#ca8a04' },
-  text:    { border: 'border-blue-500/60',   headerBg: 'bg-blue-950/60',   accent: 'text-blue-400',   hex: '#3b82f6', minimap: '#2563eb' },
-  image:   { border: 'border-purple-500/60', headerBg: 'bg-purple-950/60', accent: 'text-purple-400', hex: '#a855f7', minimap: '#9333ea' },
-  video:   { border: 'border-pink-500/60',   headerBg: 'bg-pink-950/60',   accent: 'text-pink-400',   hex: '#ec4899', minimap: '#db2777' },
-  audio:   { border: 'border-orange-500/60', headerBg: 'bg-orange-950/60', accent: 'text-orange-400', hex: '#f97316', minimap: '#ea580c' },
-  buttons: { border: 'border-emerald-500/60',headerBg: 'bg-emerald-950/60',accent: 'text-emerald-400',hex: '#10b981', minimap: '#059669' },
-  delay:   { border: 'border-slate-500/60',  headerBg: 'bg-slate-800/60',  accent: 'text-slate-400',  hex: '#64748b', minimap: '#475569' },
+const NEON: Record<BlockType, { border: string; headerBg: string; accent: string; hex: string; minimap: string }> = {
+  trigger: { border: 'border-amber-500/50',   headerBg: 'bg-amber-950/50',   accent: 'text-amber-400',   hex: '#f59e0b', minimap: '#d97706' },
+  text:    { border: 'border-blue-500/50',    headerBg: 'bg-blue-950/50',    accent: 'text-blue-400',    hex: '#3b82f6', minimap: '#2563eb' },
+  image:   { border: 'border-violet-500/50',  headerBg: 'bg-violet-950/50',  accent: 'text-violet-400',  hex: '#8b5cf6', minimap: '#7c3aed' },
+  video:   { border: 'border-pink-500/50',    headerBg: 'bg-pink-950/50',    accent: 'text-pink-400',    hex: '#ec4899', minimap: '#db2777' },
+  audio:   { border: 'border-orange-500/50',  headerBg: 'bg-orange-950/50',  accent: 'text-orange-400',  hex: '#f97316', minimap: '#ea580c' },
+  buttons: { border: 'border-emerald-500/50', headerBg: 'bg-emerald-950/50', accent: 'text-emerald-400', hex: '#10b981', minimap: '#059669' },
+  delay:   { border: 'border-slate-500/50',   headerBg: 'bg-slate-800/50',   accent: 'text-slate-400',   hex: '#64748b', minimap: '#475569' },
 };
 
-// ── Block → React Flow node / edge conversion ─────────────────────────────────
+// ── Shared editor context (avoids functions in edge data) ─────────────────────
+
+type EditorCtxType = { insertBetween: (sourceId: string, targetId: string) => void };
+const EditorCtx = createContext<EditorCtxType>({ insertBetween: () => {} });
+
+// ── React Flow helpers ────────────────────────────────────────────────────────
 
 type RFNodeData = { block: FlowBlock };
 type RFNode = Node<RFNodeData>;
 
-const NODE_W = 240;
-const INIT_Y_SPACING = 180;
-const INIT_X = 300;
+const NODE_W   = 248;
+const INIT_X   = 260;
+const Y_GAP    = 170;
+
+const EDGE_DEFAULTS = {
+  type: 'flowEdge',
+  markerEnd: { type: MarkerType.ArrowClosed, color: '#6366f1', width: 18, height: 18 },
+} satisfies Partial<Edge>;
 
 function blocksToNodes(blocks: FlowBlock[]): RFNode[] {
   return blocks.map((block, i) => ({
     id: block.id,
     type: 'flowNode',
-    position: { x: INIT_X, y: i * INIT_Y_SPACING + 60 },
+    position: { x: INIT_X, y: i * Y_GAP + 40 },
     data: { block },
   }));
 }
@@ -69,8 +77,7 @@ function blocksToEdges(blocks: FlowBlock[]): Edge[] {
     id: `e__${block.id}__${blocks[i + 1].id}`,
     source: block.id,
     target: blocks[i + 1].id,
-    type: 'flowEdge',
-    animated: true,
+    ...EDGE_DEFAULTS,
   }));
 }
 
@@ -78,8 +85,8 @@ function rfToBlocks(nodes: RFNode[], edges: Edge[]): FlowBlock[] {
   if (!nodes.length) return [];
   const nextMap = new Map(edges.map((e) => [e.source, e.target]));
   const hasIncoming = new Set(edges.map((e) => e.target));
-  const root = nodes.find((n) => !hasIncoming.has(n.id));
-  if (!root) return [...nodes].sort((a, b) => a.position.y - b.position.y).map((n) => n.data.block);
+  const root = nodes.find((n) => !hasIncoming.has(n.id))
+    ?? [...nodes].sort((a, b) => a.position.y - b.position.y)[0];
   const result: FlowBlock[] = [];
   const seen = new Set<string>();
   let cur: string | undefined = root.id;
@@ -106,14 +113,14 @@ function TriggerEditor({ block, onChange }: { block: TriggerBlock; onChange: (b:
         <input type="text" value={block.keyword}
           onChange={(e) => onChange({ ...block, keyword: e.target.value })}
           placeholder="Ex: oi, ajuda, preço…"
-          className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-yellow-500/70" />
+          className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500/60" />
       </div>
       <div>
         <label className="block text-xs text-gray-400 mb-1.5">Correspondência</label>
         <div className="flex gap-2 flex-wrap">
           {(['contains', 'exact', 'starts'] as const).map((m) => (
             <button key={m} type="button" onClick={() => onChange({ ...block, matchType: m })}
-              className={`px-3 py-1 text-xs rounded-full border transition-colors ${block.matchType === m ? 'bg-yellow-950/70 border-yellow-600/60 text-yellow-300' : 'border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300'}`}>
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${block.matchType === m ? 'bg-amber-950/70 border-amber-600/60 text-amber-300' : 'border-gray-700 text-gray-500 hover:border-gray-600'}`}>
               {m === 'contains' ? 'Contém' : m === 'exact' ? 'Exata' : 'Começa com'}
             </button>
           ))}
@@ -147,7 +154,7 @@ function MediaEditor({ block, onChange }: {
         <input type="url" value={block.url}
           onChange={(e) => onChange({ ...block, url: e.target.value } as typeof block)}
           placeholder="https://…"
-          className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-500/60" />
+          className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-violet-500/60" />
       </div>
       {block.type !== 'audio' && (
         <div>
@@ -155,7 +162,7 @@ function MediaEditor({ block, onChange }: {
           <input type="text" value={(block as ImageBlock | VideoBlock).caption}
             onChange={(e) => onChange({ ...block, caption: e.target.value } as ImageBlock | VideoBlock)}
             placeholder="Legenda…"
-            className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/60" />
+            className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500/60" />
         </div>
       )}
     </div>
@@ -178,9 +185,7 @@ function ButtonsEditor({ block, onChange }: { block: ButtonsBlock; onChange: (b:
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs text-gray-400">Botões ({block.buttons.length})</label>
-          {block.buttons.length < 6 && (
-            <button type="button" onClick={addBtn} className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">+ Adicionar</button>
-          )}
+          {block.buttons.length < 6 && <button type="button" onClick={addBtn} className="text-xs text-emerald-400 hover:text-emerald-300">+ Adicionar</button>}
         </div>
         <div className="space-y-2">
           {block.buttons.map((btn, i) => (
@@ -193,7 +198,7 @@ function ButtonsEditor({ block, onChange }: { block: ButtonsBlock; onChange: (b:
                 placeholder="URL"
                 className="flex-1 bg-[#0d1117] border border-gray-700 rounded-lg px-2.5 py-1.5 text-white text-xs font-mono focus:outline-none focus:border-emerald-500/60" />
               {block.buttons.length > 1 && (
-                <button type="button" onClick={() => removeBtn(btn.id)} className="text-red-600 hover:text-red-400 text-base leading-none shrink-0 transition-colors">×</button>
+                <button type="button" onClick={() => removeBtn(btn.id)} className="text-red-600 hover:text-red-400 text-base leading-none shrink-0">×</button>
               )}
             </div>
           ))}
@@ -226,138 +231,201 @@ function DelayEditor({ block, onChange }: { block: DelayBlock; onChange: (b: Del
   );
 }
 
-// ── Custom node ───────────────────────────────────────────────────────────────
+// ── Custom node card ──────────────────────────────────────────────────────────
 
 function FlowNodeCard({ data, selected }: NodeProps) {
   const { block } = data as RFNodeData;
   const meta = BLOCK_META[block.type];
   const n = NEON[block.type];
+  const isFirst = block.type === 'trigger';
 
   return (
     <div
-      className={`relative rounded-2xl border overflow-hidden cursor-pointer select-none backdrop-blur-sm transition-all duration-150 ${n.border}`}
+      className={`relative rounded-2xl border overflow-visible cursor-default select-none ${n.border}`}
       style={{
         width: NODE_W,
-        background: 'rgba(10, 12, 20, 0.92)',
+        background: 'rgba(9, 11, 20, 0.96)',
+        backdropFilter: 'blur(16px)',
         boxShadow: selected
-          ? `0 0 0 1.5px ${n.hex}99, 0 0 28px 4px ${n.hex}30, 0 8px 32px rgba(0,0,0,0.5)`
-          : '0 4px 24px rgba(0,0,0,0.45)',
+          ? `0 0 0 1.5px ${n.hex}99, 0 0 30px 4px ${n.hex}28, 0 8px 40px rgba(0,0,0,0.6)`
+          : `0 0 0 1px ${n.hex}20, 0 6px 28px rgba(0,0,0,0.5)`,
+        transition: 'box-shadow 0.2s ease',
       }}
     >
-      {/* Input handle */}
-      {block.type !== 'trigger' && (
+      {/* ── Input handle (top) ── */}
+      {!isFirst && (
         <Handle
           type="target"
           position={Position.Top}
-          style={{
-            width: 12, height: 12, borderRadius: '50%',
-            background: '#0a0c14', border: `2px solid ${n.hex}88`,
-            top: -6,
-          }}
-        />
+          style={{ top: -10, left: '50%', transform: 'translateX(-50%)', background: 'transparent', border: 'none', width: 20, height: 20, cursor: 'crosshair' }}
+        >
+          <div
+            style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 10, height: 10, borderRadius: '50%',
+              background: '#090b14',
+              border: `2px solid ${n.hex}`,
+              boxShadow: `0 0 8px ${n.hex}60`,
+              pointerEvents: 'none',
+            }}
+          />
+        </Handle>
       )}
 
-      {/* Header */}
-      <div className={`px-4 py-3 ${n.headerBg} flex items-center gap-3 border-b ${n.border}`}>
+      {/* ── Header ── */}
+      <div
+        className="flex items-center gap-3 px-4 py-3"
+        style={{ background: `linear-gradient(135deg, ${n.hex}12, ${n.hex}06)`, borderBottom: `1px solid ${n.hex}20` }}
+      >
         <div
           className="w-9 h-9 flex items-center justify-center rounded-xl text-lg shrink-0"
-          style={{ background: `${n.hex}18`, border: `1px solid ${n.hex}40` }}
+          style={{ background: `${n.hex}18`, border: `1px solid ${n.hex}35`, boxShadow: `0 0 10px ${n.hex}20` }}
         >
           {meta.icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className={`text-[10px] font-black uppercase tracking-[0.14em] ${n.accent}`}>{meta.label}</div>
-          <div className="text-xs text-gray-400 truncate mt-0.5 leading-tight">{blockSummary(block)}</div>
+          <div className="text-xs text-gray-400 truncate mt-0.5 leading-tight max-w-[140px]">{blockSummary(block)}</div>
         </div>
-        {block.type === 'trigger' && (
-          <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border shrink-0"
-            style={{ borderColor: `${n.hex}50`, background: `${n.hex}18`, color: n.hex }}>
-            início
+        {isFirst && (
+          <span
+            className="text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
+            style={{ border: `1px solid ${n.hex}55`, background: `${n.hex}18`, color: n.hex }}
+          >
+            Início
           </span>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-4 py-2 flex items-center justify-between">
-        <span className="text-[10px] text-gray-600 leading-tight">{meta.description}</span>
-        {selected && <span className={`text-[10px] font-semibold ${n.accent} shrink-0 ml-2`}>editando</span>}
+      {/* ── Body ── */}
+      <div className="px-4 py-2.5 flex items-center justify-between">
+        <span className="text-[10px] text-gray-600 leading-tight line-clamp-1 flex-1">{meta.description}</span>
+        {selected && <span className={`text-[10px] font-semibold ${n.accent} shrink-0 ml-2`}>● editando</span>}
       </div>
 
-      {/* Output handle */}
+      {/* ── Output handle (bottom) ── */}
       <Handle
         type="source"
         position={Position.Bottom}
-        style={{
-          width: 12, height: 12, borderRadius: '50%',
-          background: '#0a0c14', border: `2px solid ${n.hex}88`,
-          bottom: -6,
-        }}
-      />
+        style={{ bottom: -10, left: '50%', transform: 'translateX(-50%)', background: 'transparent', border: 'none', width: 20, height: 20, cursor: 'crosshair' }}
+      >
+        <div
+          style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 10, height: 10, borderRadius: '50%',
+            background: '#090b14',
+            border: `2px solid ${n.hex}`,
+            boxShadow: `0 0 8px ${n.hex}60`,
+            pointerEvents: 'none',
+          }}
+        />
+      </Handle>
     </div>
   );
 }
 
 const nodeTypes = { flowNode: FlowNodeCard };
 
-// ── Custom edge with "+" insert button ────────────────────────────────────────
-
-type FlowEdgeData = { onInsert: (sourceId: string, targetId: string) => void; sourceId: string; targetId: string };
+// ── Custom animated edge with "+" insert button ───────────────────────────────
 
 function FlowEdge({
+  id, source, target,
   sourceX, sourceY, targetX, targetY,
   sourcePosition, targetPosition,
-  data,
+  selected, markerEnd,
 }: EdgeProps) {
-  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition });
-  const { onInsert, sourceId, targetId } = (data ?? {}) as Partial<FlowEdgeData>;
+  const { insertBetween } = useContext(EditorCtx);
   const [hovered, setHovered] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const enter = () => { if (timerRef.current) clearTimeout(timerRef.current); setHovered(true); };
+  const leave = () => { timerRef.current = setTimeout(() => setHovered(false), 130); };
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition,
+    curvature: 0.35,
+  });
+
+  const active = selected || hovered;
+  const stroke       = active ? '#818cf8' : '#4f46e5';
+  const strokeOpac   = active ? 0.85      : 0.45;
+  const strokeW      = active ? 2.5       : 1.5;
+  const glowFilter   = active ? 'drop-shadow(0 0 5px #6366f188)' : 'none';
 
   return (
     <>
+      {/* Wide transparent hit area */}
       <path
         d={edgePath}
-        stroke="url(#edgeGrad)"
-        strokeWidth={2}
+        stroke="transparent"
+        strokeWidth={28}
         fill="none"
-        strokeOpacity={0.55}
-        className="react-flow__edge-path"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        style={{ cursor: 'pointer' }}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
       />
-      <defs>
-        <linearGradient id="edgeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#a855f7" stopOpacity="0.8" />
-        </linearGradient>
-      </defs>
-      {onInsert && (
-        <EdgeLabelRenderer>
-          <div
+
+      {/* Visible animated edge */}
+      <path
+        d={edgePath}
+        stroke={stroke}
+        strokeWidth={strokeW}
+        strokeOpacity={strokeOpac}
+        fill="none"
+        markerEnd={markerEnd}
+        className="flow-edge-animated"
+        style={{ filter: glowFilter, transition: 'stroke 0.2s, stroke-width 0.2s, stroke-opacity 0.2s, filter 0.2s' }}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+      />
+
+      {/* "+" insert button at midpoint */}
+      <EdgeLabelRenderer>
+        <div
+          style={{
+            position: 'absolute',
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+            pointerEvents: 'all',
+            zIndex: 20,
+            opacity: active ? 1 : 0,
+            transition: 'opacity 0.15s ease',
+          }}
+          onMouseEnter={enter}
+          onMouseLeave={leave}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); insertBetween(source, target); }}
+            title="Inserir bloco aqui"
             style={{
-              position: 'absolute',
-              transform: `translate(-50%,-50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'all',
-              zIndex: 10,
-              opacity: hovered ? 1 : 0,
-              transition: 'opacity 0.15s',
+              width: 22, height: 22,
+              borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(10, 12, 24, 0.97)',
+              border: '1.5px solid rgba(99,102,241,0.7)',
+              color: '#a5b4fc',
+              fontSize: 14,
+              fontWeight: 700,
+              lineHeight: 1,
+              cursor: 'pointer',
+              boxShadow: '0 0 12px rgba(99,102,241,0.45)',
+              transition: 'box-shadow 0.15s, border-color 0.15s',
             }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(99,102,241,0.7)';
+              (e.currentTarget as HTMLElement).style.borderColor = 'rgba(129,140,248,0.9)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.boxShadow = '0 0 12px rgba(99,102,241,0.45)';
+              (e.currentTarget as HTMLElement).style.borderColor = 'rgba(99,102,241,0.7)';
+            }}
           >
-            <button
-              onClick={() => onInsert(sourceId!, targetId!)}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold text-indigo-300 hover:text-white transition-colors"
-              style={{
-                background: 'rgba(18, 20, 35, 0.95)',
-                border: '1px solid rgba(99, 102, 241, 0.5)',
-                boxShadow: '0 0 10px rgba(99, 102, 241, 0.3)',
-              }}
-            >
-              +
-            </button>
-          </div>
-        </EdgeLabelRenderer>
-      )}
+            +
+          </button>
+        </div>
+      </EdgeLabelRenderer>
     </>
   );
 }
@@ -375,28 +443,21 @@ function BlockPalette({ onAdd, collapsed, onToggle }: {
 }) {
   return (
     <div
-      className="flex flex-col h-full border-r border-white/5 transition-all duration-200"
+      className="flex flex-col h-full shrink-0 overflow-hidden transition-all duration-200"
       style={{
-        width: collapsed ? 48 : 200,
-        background: 'rgba(8, 10, 18, 0.9)',
+        width: collapsed ? 52 : 196,
+        background: 'rgba(7, 9, 17, 0.95)',
         backdropFilter: 'blur(12px)',
+        borderRight: '1px solid rgba(255,255,255,0.05)',
       }}
     >
-      {/* Sidebar header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-white/5 shrink-0">
-        {!collapsed && (
-          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-600">Blocos</p>
-        )}
-        <button
-          onClick={onToggle}
-          className="text-gray-600 hover:text-gray-300 transition-colors ml-auto text-xs"
-          title={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-        >
-          {collapsed ? '▶' : '◀'}
+      <div className="flex items-center px-3 py-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        {!collapsed && <p className="text-[10px] font-black uppercase tracking-[0.15em] text-gray-600 flex-1">Blocos</p>}
+        <button onClick={onToggle} className="text-gray-700 hover:text-gray-400 transition-colors text-xs ml-auto" title={collapsed ? 'Expandir' : 'Colapsar'}>
+          {collapsed ? '›' : '‹'}
         </button>
       </div>
 
-      {/* Block items */}
       <div className="flex-1 overflow-y-auto py-2">
         {BLOCK_ORDER.map((type) => {
           const meta = BLOCK_META[type];
@@ -407,16 +468,25 @@ function BlockPalette({ onAdd, collapsed, onToggle }: {
               onClick={() => onAdd(type)}
               draggable
               onDragStart={(e) => e.dataTransfer.setData('application/rftype', type)}
-              className="w-full flex items-center gap-3 text-left transition-colors hover:bg-white/5"
-              style={{ padding: collapsed ? '8px 12px' : '10px 12px' }}
-              title={collapsed ? meta.label : meta.description}
+              className="w-full flex items-center gap-3 text-left transition-colors"
+              style={{ padding: collapsed ? '8px 10px' : '9px 12px' }}
+              title={collapsed ? `${meta.label} — ${meta.description}` : meta.description}
             >
               <div
-                className="shrink-0 flex items-center justify-center rounded-lg text-base"
+                className="shrink-0 flex items-center justify-center rounded-xl text-lg transition-all"
                 style={{
-                  width: 32, height: 32,
+                  width: 34, height: 34,
                   background: `${n.hex}14`,
-                  border: `1px solid ${n.hex}35`,
+                  border: `1px solid ${n.hex}30`,
+                  boxShadow: `0 0 0 0 ${n.hex}00`,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = `${n.hex}22`;
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 0 12px ${n.hex}30`;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = `${n.hex}14`;
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 0 0 0 ${n.hex}00`;
                 }}
               >
                 {meta.icon}
@@ -424,7 +494,7 @@ function BlockPalette({ onAdd, collapsed, onToggle }: {
               {!collapsed && (
                 <div className="min-w-0">
                   <div className={`text-xs font-semibold ${n.accent} leading-tight`}>{meta.label}</div>
-                  <div className="text-[10px] text-gray-600 leading-tight mt-0.5 line-clamp-1">{meta.description}</div>
+                  <div className="text-[10px] text-gray-600 leading-tight mt-0.5 truncate">{meta.description}</div>
                 </div>
               )}
             </button>
@@ -448,20 +518,21 @@ function NodeInspector({ block, onUpdate, onDelete, onClose }: {
 
   return (
     <div
-      className="flex flex-col h-full border-l border-white/5"
+      className="flex flex-col h-full shrink-0"
       style={{
-        width: 288,
-        background: 'rgba(8, 10, 18, 0.95)',
+        width: 284,
+        background: 'rgba(7, 9, 17, 0.97)',
         backdropFilter: 'blur(12px)',
+        borderLeft: '1px solid rgba(255,255,255,0.05)',
       }}
     >
       <div
-        className={`flex items-center gap-2.5 px-4 py-3 border-b border-white/5 shrink-0 ${n.headerBg}`}
-        style={{ borderBottomColor: `${n.hex}25` }}
+        className="flex items-center gap-2.5 px-4 py-3 shrink-0"
+        style={{ background: `${n.hex}0e`, borderBottom: `1px solid ${n.hex}22` }}
       >
         <div
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-base shrink-0"
-          style={{ background: `${n.hex}18`, border: `1px solid ${n.hex}40` }}
+          className="w-8 h-8 flex items-center justify-center rounded-xl text-base shrink-0"
+          style={{ background: `${n.hex}18`, border: `1px solid ${n.hex}40`, boxShadow: `0 0 10px ${n.hex}20` }}
         >
           {meta.icon}
         </div>
@@ -482,9 +553,13 @@ function NodeInspector({ block, onUpdate, onDelete, onClose }: {
         {block.type === 'delay'   && <DelayEditor   block={block} onChange={(b) => onUpdate(b)} />}
       </div>
 
-      <div className="px-4 py-3 border-t border-white/5 shrink-0">
+      <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
         <button onClick={onDelete}
-          className="w-full px-3 py-2 text-xs text-red-500 border border-red-900/40 rounded-lg hover:bg-red-950/40 transition-colors">
+          className="w-full px-3 py-2 text-xs text-red-500 rounded-lg transition-colors"
+          style={{ border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.04)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.04)'; }}
+        >
           Remover bloco
         </button>
       </div>
@@ -492,14 +567,37 @@ function NodeInspector({ block, onUpdate, onDelete, onClose }: {
   );
 }
 
-// ── Inner editor (needs ReactFlowProvider context) ────────────────────────────
+// ── Flow order indicator (left of canvas) ────────────────────────────────────
 
-interface Props {
-  flow: Flow;
-  bots: Bot[];
-  onBack: () => void;
-  onSaved: (flow: Flow) => void;
+function FlowStepList({ nodes, edges }: { nodes: RFNode[]; edges: Edge[] }) {
+  const ordered = rfToBlocks(nodes, edges);
+  if (ordered.length === 0) return null;
+  return (
+    <div className="absolute top-4 left-4 z-10 flex flex-col gap-0 pointer-events-none select-none">
+      {ordered.map((block, i) => {
+        const n = NEON[block.type];
+        const meta = BLOCK_META[block.type];
+        return (
+          <React.Fragment key={block.id}>
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'rgba(8,10,20,0.75)', backdropFilter: 'blur(8px)', border: `1px solid ${n.hex}25` }}>
+              <span className="text-sm">{meta.icon}</span>
+              <span className={`text-[10px] font-semibold ${n.accent}`}>{meta.label}</span>
+            </div>
+            {i < ordered.length - 1 && (
+              <div className="flex justify-center py-0.5">
+                <div style={{ width: 1, height: 10, background: `linear-gradient(to bottom, #4f46e560, #7c3aed60)` }} />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
 }
+
+// ── Main inner editor ─────────────────────────────────────────────────────────
+
+interface Props { flow: Flow; bots: Bot[]; onBack: () => void; onSaved: (flow: Flow) => void; }
 
 function FlowEditorInner({ flow: initialFlow, bots, onBack, onSaved }: Props) {
   const { screenToFlowPosition, fitView } = useReactFlow();
@@ -514,49 +612,37 @@ function FlowEditorInner({ flow: initialFlow, bots, onBack, onSaved }: Props) {
   const [error, setError] = useState('');
   const [savedOk, setSavedOk] = useState(false);
 
-  useEffect(() => { setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 100); }, [fitView]);
+  useEffect(() => { setTimeout(() => fitView({ padding: 0.25, duration: 500 }), 120); }, [fitView]);
 
-  // Build edges with insert callbacks whenever nodes/edges change
-  const makeEdgesWithCallbacks = useCallback((baseEdges: Edge[], currentNodes: RFNode[]) => {
-    return baseEdges.map((e) => ({
-      ...e,
-      type: 'flowEdge',
-      animated: true,
-      data: {
-        sourceId: e.source,
-        targetId: e.target,
-        onInsert: (sourceId: string, targetId: string) => {
-          const block = createBlock('text');
-          const srcNode = currentNodes.find((n) => n.id === sourceId);
-          const tgtNode = currentNodes.find((n) => n.id === targetId);
-          const newX = srcNode ? srcNode.position.x : INIT_X;
-          const newY = srcNode && tgtNode ? (srcNode.position.y + tgtNode.position.y) / 2 : (srcNode?.position.y ?? 200) + 100;
-          const newNode: RFNode = { id: block.id, type: 'flowNode', position: { x: newX, y: newY }, data: { block } };
-          setNodes((nds) => [...nds, newNode]);
-          setEdges((eds) => {
-            const filtered = eds.filter((ex) => !(ex.source === sourceId && ex.target === targetId));
-            return [
-              ...filtered,
-              { id: `e__${sourceId}__${block.id}`, source: sourceId, target: block.id, type: 'flowEdge', animated: true },
-              { id: `e__${block.id}__${targetId}`, source: block.id, target: targetId, type: 'flowEdge', animated: true },
-            ];
-          });
-          setSelectedBlock(block);
-        },
-      },
-    }));
-  }, [setNodes, setEdges]);
+  // Insert a new Text node between two connected nodes
+  const insertBetween = useCallback((sourceId: string, targetId: string) => {
+    const block = createBlock('text');
+    const srcNode = nodes.find((n) => n.id === sourceId);
+    const tgtNode = nodes.find((n) => n.id === targetId);
+    const x = srcNode?.position.x ?? INIT_X;
+    const y = srcNode && tgtNode ? (srcNode.position.y + tgtNode.position.y) / 2 : (srcNode?.position.y ?? 200) + Y_GAP / 2;
+    const newNode: RFNode = { id: block.id, type: 'flowNode', position: { x, y }, data: { block } };
+
+    setNodes((nds) => [...nds, newNode]);
+    setEdges((eds) => {
+      const without = eds.filter((e) => !(e.source === sourceId && e.target === targetId));
+      return [
+        ...without,
+        { id: `e__${sourceId}__${block.id}`, source: sourceId, target: block.id, ...EDGE_DEFAULTS },
+        { id: `e__${block.id}__${targetId}`, source: block.id, target: targetId, ...EDGE_DEFAULTS },
+      ];
+    });
+    setSelectedBlock(block);
+  }, [nodes, setNodes, setEdges]);
+
+  const editorCtx: EditorCtxType = { insertBetween };
 
   const onConnect: OnConnect = useCallback((params: Connection) => {
-    setEdges((eds) => addEdge({ ...params, type: 'flowEdge', animated: true }, eds));
+    setEdges((eds) => addEdge({ ...params, ...EDGE_DEFAULTS }, eds));
   }, [setEdges]);
 
   const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
-    if (sel.length === 1) {
-      setSelectedBlock((sel[0] as RFNode).data.block);
-    } else {
-      setSelectedBlock(null);
-    }
+    setSelectedBlock(sel.length === 1 ? (sel[0] as RFNode).data.block : null);
   }, []);
 
   const onNodeDoubleClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -564,71 +650,63 @@ function FlowEditorInner({ flow: initialFlow, bots, onBack, onSaved }: Props) {
   }, []);
 
   const updateBlock = useCallback((updated: FlowBlock) => {
-    setNodes((nds) =>
-      nds.map((n) => n.id === updated.id ? { ...n, data: { ...n.data, block: updated } } : n)
-    );
+    setNodes((nds) => nds.map((n) => n.id === updated.id ? { ...n, data: { ...n.data, block: updated } } : n));
     setSelectedBlock(updated);
   }, [setNodes]);
 
   const deleteSelectedBlock = useCallback(() => {
     if (!selectedBlock) return;
-    setNodes((nds) => nds.filter((n) => n.id !== selectedBlock.id));
-    setEdges((eds) => eds.filter((e) => e.source !== selectedBlock.id && e.target !== selectedBlock.id));
+    const id = selectedBlock.id;
+    // Re-wire: find predecessor and successor
+    const inEdge = edges.find((e) => e.target === id);
+    const outEdge = edges.find((e) => e.source === id);
+    setNodes((nds) => nds.filter((n) => n.id !== id));
+    setEdges((eds) => {
+      const filtered = eds.filter((e) => e.source !== id && e.target !== id);
+      if (inEdge && outEdge) {
+        filtered.push({ id: `e__${inEdge.source}__${outEdge.target}`, source: inEdge.source, target: outEdge.target, ...EDGE_DEFAULTS });
+      }
+      return filtered;
+    });
     setSelectedBlock(null);
-  }, [selectedBlock, setNodes, setEdges]);
+  }, [selectedBlock, edges, setNodes, setEdges]);
 
-  const addBlock = useCallback((type: BlockType, position?: { x: number; y: number }) => {
+  const addBlock = useCallback((type: BlockType, pos?: { x: number; y: number }) => {
     const block = createBlock(type);
     const lastNode = [...nodes].sort((a, b) => b.position.y - a.position.y)[0];
-    const pos = position ?? { x: lastNode ? lastNode.position.x : INIT_X, y: lastNode ? lastNode.position.y + INIT_Y_SPACING : 60 };
-    const newNode: RFNode = { id: block.id, type: 'flowNode', position: pos, data: { block } };
-    setNodes((nds) => {
-      if (lastNode) {
-        setEdges((eds) => [...eds, {
-          id: `e__${lastNode.id}__${block.id}`,
-          source: lastNode.id, target: block.id,
-          type: 'flowEdge', animated: true,
-        }]);
-      }
-      return [...nds, newNode];
-    });
+    const position = pos ?? { x: lastNode?.position.x ?? INIT_X, y: (lastNode?.position.y ?? 0) + Y_GAP };
+    const newNode: RFNode = { id: block.id, type: 'flowNode', position, data: { block } };
+    setNodes((nds) => [...nds, newNode]);
+    if (lastNode) {
+      setEdges((eds) => [...eds, { id: `e__${lastNode.id}__${block.id}`, source: lastNode.id, target: block.id, ...EDGE_DEFAULTS }]);
+    }
     setSelectedBlock(block);
-    setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 50);
+    setTimeout(() => fitView({ padding: 0.2, duration: 400 }), 60);
   }, [nodes, setNodes, setEdges, fitView]);
 
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
-
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }, []);
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const type = e.dataTransfer.getData('application/rftype') as BlockType;
     if (!type) return;
-    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-    const block = createBlock(type);
-    const newNode: RFNode = { id: block.id, type: 'flowNode', position, data: { block } };
-    setNodes((nds) => [...nds, newNode]);
-    setSelectedBlock(block);
-  }, [screenToFlowPosition, setNodes]);
+    addBlock(type, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+  }, [addBlock, screenToFlowPosition]);
 
   const save = async () => {
     if (!flow.name.trim()) { setError('Dê um nome ao fluxo.'); return; }
     setError('');
     setSaving(true);
     const blocks = rfToBlocks(nodes, edges);
-    const payload = { ...flow, blocks };
     try {
       const res = await fetch(flow.id ? `/api/flows/${flow.id}` : '/api/flows', {
         method: flow.id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...flow, blocks }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? `Erro ${res.status}`); return; }
-      const saved = data as Flow;
-      setFlow(saved);
-      onSaved(saved);
+      setFlow(data as Flow);
+      onSaved(data as Flow);
       setSavedOk(true);
       setTimeout(() => setSavedOk(false), 2500);
     } catch (err) {
@@ -638,148 +716,124 @@ function FlowEditorInner({ flow: initialFlow, bots, onBack, onSaved }: Props) {
     }
   };
 
-  const edgesWithCb = makeEdgesWithCallbacks(edges, nodes);
-
   return (
-    <div
-      className="-mx-4 -my-6 flex flex-col overflow-hidden"
-      style={{ height: 'calc(100vh - 105px)' }}
-    >
-      {/* ── Top bar ── */}
-      <div
-        className="flex items-center gap-2 px-4 py-2 shrink-0 flex-wrap gap-y-1.5 border-b border-white/5"
-        style={{ background: 'rgba(8, 10, 18, 0.95)', backdropFilter: 'blur(12px)' }}
-      >
-        <button onClick={onBack}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/5 shrink-0">
-          ← Fluxos
-        </button>
-        <div className="w-px h-4 bg-white/8 shrink-0" />
+    <EditorCtx.Provider value={editorCtx}>
+      <div className="-mx-4 -my-6 flex flex-col overflow-hidden" style={{ height: 'calc(100vh - 105px)' }}>
 
-        <input
-          type="text"
-          value={flow.name}
-          onChange={(e) => setFlow((f) => ({ ...f, name: e.target.value }))}
-          placeholder="Nome do fluxo"
-          className="min-w-[120px] max-w-xs bg-transparent border border-white/10 focus:border-indigo-500/50 rounded-lg px-3 py-1.5 text-white text-sm font-medium focus:outline-none"
-        />
+        {/* ── Top bar ── */}
+        <div
+          className="flex items-center gap-2 px-4 py-2 shrink-0 flex-wrap gap-y-1.5"
+          style={{ background: 'rgba(7, 9, 17, 0.97)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+        >
+          <button onClick={onBack} className="flex items-center gap-1 text-xs text-gray-500 hover:text-white transition-colors px-2.5 py-1.5 rounded-lg hover:bg-white/5 shrink-0">
+            ← Fluxos
+          </button>
+          <div className="w-px h-4 shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }} />
 
-        {bots.length > 0 && (
-          <select value={flow.botId} onChange={(e) => setFlow((f) => ({ ...f, botId: e.target.value }))}
-            className="bg-transparent border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500/50">
-            <option value="">— Bot —</option>
-            {bots.map((b) => <option key={b.id} value={b.id}>{b.defaultEmoji} {b.name}</option>)}
-          </select>
-        )}
+          <input type="text" value={flow.name} onChange={(e) => setFlow((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Nome do fluxo"
+            className="min-w-[120px] max-w-xs bg-transparent text-white text-sm font-medium focus:outline-none"
+            style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px' }} />
 
-        <button
-          onClick={() => setFlow((f) => ({ ...f, active: !f.active }))}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors shrink-0 ${
-            flow.active
-              ? 'border-emerald-700/60 text-emerald-300 bg-emerald-950/50'
-              : 'border-white/10 text-gray-500 hover:border-white/20'
-          }`}>
-          {flow.active ? '● Ativo' : '○ Inativo'}
-        </button>
+          {bots.length > 0 && (
+            <select value={flow.botId} onChange={(e) => setFlow((f) => ({ ...f, botId: e.target.value }))}
+              className="bg-transparent text-xs text-white focus:outline-none"
+              style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '5px 12px' }}>
+              <option value="">— Bot —</option>
+              {bots.map((b) => <option key={b.id} value={b.id}>{b.defaultEmoji} {b.name}</option>)}
+            </select>
+          )}
 
-        <div className="flex-1" />
+          <button
+            onClick={() => setFlow((f) => ({ ...f, active: !f.active }))}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors shrink-0 ${flow.active ? 'text-emerald-300' : 'text-gray-500 hover:text-gray-400'}`}
+            style={{ border: flow.active ? '1px solid rgba(16,185,129,0.5)' : '1px solid rgba(255,255,255,0.1)', background: flow.active ? 'rgba(16,185,129,0.08)' : 'transparent' }}>
+            {flow.active ? '● Ativo' : '○ Inativo'}
+          </button>
 
-        {error && (
-          <span className="text-xs text-red-400 bg-red-950/50 border border-red-900/40 rounded-lg px-2.5 py-1 max-w-xs truncate">✗ {error}</span>
-        )}
+          <div className="flex-1" />
+          {error && <span className="text-xs text-red-400 bg-red-950/50 rounded-lg px-2.5 py-1 max-w-xs truncate" style={{ border: '1px solid rgba(239,68,68,0.3)' }}>✗ {error}</span>}
+          <span className="text-xs text-gray-700 shrink-0">{nodes.length} bloco{nodes.length !== 1 ? 's' : ''}</span>
 
-        <span className="text-xs text-gray-700 shrink-0">{nodes.length} bloco{nodes.length !== 1 ? 's' : ''}</span>
-
-        <button onClick={save} disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold rounded-lg transition-all disabled:opacity-50 shrink-0"
-          style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: saving ? 'none' : '0 0 20px rgba(99,102,241,0.3)' }}>
-          {saving && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-          <span className="text-white">{savedOk ? '✓ Salvo' : saving ? '…' : 'Salvar'}</span>
-        </button>
-      </div>
-
-      {/* ── Main area ── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left palette */}
-        <BlockPalette
-          onAdd={(type) => addBlock(type)}
-          collapsed={sidebarCollapsed}
-          onToggle={() => setSidebarCollapsed((v) => !v)}
-        />
-
-        {/* Canvas */}
-        <div className="flex-1 relative" onDragOver={onDragOver} onDrop={onDrop}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edgesWithCb}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSelectionChange={onSelectionChange}
-            onNodeDoubleClick={onNodeDoubleClick}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            fitView
-            proOptions={{ hideAttribution: true }}
-            style={{ background: 'transparent' }}
-            deleteKeyCode="Delete"
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={28}
-              size={1}
-              color="rgba(255,255,255,0.06)"
-            />
-            <Controls
-              className="rf-controls"
-              style={{
-                background: 'rgba(12, 15, 26, 0.9)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 12,
-                overflow: 'hidden',
-              }}
-            />
-            <MiniMap
-              nodeColor={(n) => {
-                const block = (n.data as RFNodeData)?.block;
-                return block ? NEON[block.type].minimap : '#334155';
-              }}
-              maskColor="rgba(6, 8, 16, 0.75)"
-              style={{
-                background: 'rgba(10, 12, 22, 0.9)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: 12,
-              }}
-            />
-
-            {/* Empty state */}
-            {nodes.length === 0 && (
-              <Panel position="top-center">
-                <div className="mt-20 text-center select-none pointer-events-none">
-                  <div className="text-6xl opacity-10 mb-4">🔀</div>
-                  <p className="text-sm text-gray-600 font-medium">Arraste ou clique em um bloco na barra lateral</p>
-                  <p className="text-xs text-gray-700 mt-1">Comece com ⚡ Gatilho</p>
-                </div>
-              </Panel>
-            )}
-          </ReactFlow>
+          <button onClick={save} disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-bold text-white rounded-lg transition-all disabled:opacity-50 shrink-0"
+            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', boxShadow: '0 0 20px rgba(99,102,241,0.3)', border: '1px solid rgba(129,140,248,0.3)' }}>
+            {saving && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+            {savedOk ? '✓ Salvo' : saving ? '…' : 'Salvar'}
+          </button>
         </div>
 
-        {/* Right inspector */}
-        {selectedBlock && (
-          <NodeInspector
-            block={selectedBlock}
-            onUpdate={updateBlock}
-            onDelete={deleteSelectedBlock}
-            onClose={() => setSelectedBlock(null)}
-          />
-        )}
+        {/* ── Main 3-column area ── */}
+        <div className="flex flex-1 overflow-hidden">
+          <BlockPalette onAdd={addBlock} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((v) => !v)} />
+
+          {/* Canvas */}
+          <div className="flex-1 relative" onDragOver={onDragOver} onDrop={onDrop}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onSelectionChange={onSelectionChange}
+              onNodeDoubleClick={onNodeDoubleClick}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              fitView
+              proOptions={{ hideAttribution: true }}
+              style={{ background: 'transparent' }}
+              deleteKeyCode="Delete"
+              connectionLineStyle={{ stroke: '#6366f1', strokeWidth: 2, strokeDasharray: '5 4', strokeOpacity: 0.7 }}
+              connectionLineType={'bezier' as never}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={28} size={1} color="rgba(255,255,255,0.055)" />
+
+              <Controls
+                style={{
+                  background: 'rgba(10,12,22,0.92)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                }}
+              />
+
+              <MiniMap
+                nodeColor={(n) => NEON[(n.data as RFNodeData)?.block?.type ?? 'text'].minimap}
+                maskColor="rgba(5,7,14,0.8)"
+                style={{
+                  background: 'rgba(8,10,20,0.92)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: 12,
+                }}
+              />
+
+              {nodes.length === 0 && (
+                <Panel position="top-center">
+                  <div className="mt-24 text-center select-none pointer-events-none">
+                    <div className="text-6xl opacity-[0.07] mb-4">🔀</div>
+                    <p className="text-sm text-gray-600">Arraste ou clique em um bloco na barra lateral</p>
+                    <p className="text-xs text-gray-700 mt-1">Comece com ⚡ Gatilho</p>
+                  </div>
+                </Panel>
+              )}
+            </ReactFlow>
+          </div>
+
+          {selectedBlock && (
+            <NodeInspector
+              block={selectedBlock}
+              onUpdate={updateBlock}
+              onDelete={deleteSelectedBlock}
+              onClose={() => setSelectedBlock(null)}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </EditorCtx.Provider>
   );
 }
 
-// ── Export with provider ──────────────────────────────────────────────────────
+// ── Export wrapped in ReactFlowProvider ───────────────────────────────────────
 
 export default function FlowEditor(props: Props) {
   return (
