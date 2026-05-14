@@ -37,72 +37,148 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
     setShowModal(true);
   };
 
-  const closeModal = () => { setShowModal(false); setError(''); };
+  const closeModal = () => {
+    setShowModal(false);
+    setError('');
+  };
 
   const handleSubmit = async () => {
+    // Client-side validation
+    if (!form.name.trim()) {
+      setError('Preencha o nome do bot.');
+      return;
+    }
+    if (!editBot && !form.token.trim()) {
+      setError('Cole o token do BotFather.');
+      return;
+    }
+
     setError('');
     setSaving(true);
+    console.log('[BotsPanel] handleSubmit start', { editBot: editBot?.id, name: form.name });
+
     try {
+      let res: Response;
+
       if (editBot) {
-        const res = await fetch(`/api/bots/${editBot.id}`, {
+        const payload = { name: form.name.trim(), defaultEmoji: form.defaultEmoji };
+        console.log('[BotsPanel] PUT /api/bots/' + editBot.id, payload);
+        res = await fetch(`/api/bots/${editBot.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: form.name, defaultEmoji: form.defaultEmoji }),
+          body: JSON.stringify(payload),
         });
-        if (!res.ok) { const d = await res.json(); setError(d.error); return; }
       } else {
-        const res = await fetch('/api/bots', {
+        const payload = {
+          name: form.name.trim(),
+          token: form.token.trim(),
+          defaultEmoji: form.defaultEmoji,
+        };
+        console.log('[BotsPanel] POST /api/bots', { name: payload.name, tokenLength: payload.token.length });
+        res = await fetch('/api/bots', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
-        if (!res.ok) { const d = await res.json(); setError(d.error); return; }
       }
+
+      console.log('[BotsPanel] response status:', res.status, res.statusText);
+
+      // Always read the body once
+      let data: Record<string, unknown>;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        console.error('[BotsPanel] failed to parse response JSON:', parseErr);
+        setError('Resposta inválida do servidor. Verifique os logs da Vercel.');
+        return;
+      }
+
+      console.log('[BotsPanel] response body:', data);
+
+      if (!res.ok) {
+        const msg = (data.error as string) ?? `Erro HTTP ${res.status}`;
+        console.error('[BotsPanel] API error:', msg);
+        setError(msg);
+        return;
+      }
+
+      // Success
+      console.log('[BotsPanel] success, closing modal and refreshing list');
       closeModal();
       onRefresh();
+    } catch (err: unknown) {
+      // Network / CORS / parse errors
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[BotsPanel] fetch threw an exception:', msg, err);
+      setError(`Erro de rede: ${msg}`);
     } finally {
       setSaving(false);
     }
   };
 
   const toggleActive = async (bot: Bot) => {
-    await fetch(`/api/bots/${bot.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: !bot.active }),
-    });
+    console.log('[BotsPanel] toggleActive', bot.id, !bot.active);
+    try {
+      await fetch(`/api/bots/${bot.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !bot.active }),
+      });
+    } catch (err) {
+      console.error('[BotsPanel] toggleActive error:', err);
+    }
     onRefresh();
   };
 
   const deleteBot = async (bot: Bot) => {
     if (!confirm(`Remover bot "${bot.name}"?`)) return;
-    await fetch(`/api/bots/${bot.id}`, { method: 'DELETE' });
+    console.log('[BotsPanel] delete bot', bot.id);
+    try {
+      await fetch(`/api/bots/${bot.id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('[BotsPanel] deleteBot error:', err);
+    }
     onRefresh();
   };
 
-  const setWebhook = async (bot: Bot) => {
+  const registerWebhook = async (bot: Bot) => {
     setWebhookStatus((s) => ({ ...s, [bot.id]: 'loading' }));
     const baseUrl = window.location.origin;
-    const res = await fetch(`/api/bots/${bot.id}/webhook`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ baseUrl }),
-    });
-    const data = await res.json();
-    setWebhookStatus((s) => ({
-      ...s,
-      [bot.id]: res.ok ? `✓ ${data.webhookUrl}` : `✗ ${data.error}`,
-    }));
+    console.log('[BotsPanel] registerWebhook', bot.id, baseUrl);
+    try {
+      const res = await fetch(`/api/bots/${bot.id}/webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl }),
+      });
+      const data = await res.json();
+      console.log('[BotsPanel] registerWebhook response:', res.status, data);
+      setWebhookStatus((s) => ({
+        ...s,
+        [bot.id]: res.ok ? `✓ ${data.webhookUrl}` : `✗ ${data.error ?? 'erro desconhecido'}`,
+      }));
+    } catch (err) {
+      console.error('[BotsPanel] registerWebhook error:', err);
+      setWebhookStatus((s) => ({ ...s, [bot.id]: `✗ Erro de rede` }));
+    }
   };
 
   const removeWebhook = async (bot: Bot) => {
     setWebhookStatus((s) => ({ ...s, [bot.id]: 'loading' }));
-    const res = await fetch(`/api/bots/${bot.id}/webhook`, { method: 'DELETE' });
-    const data = await res.json();
-    setWebhookStatus((s) => ({
-      ...s,
-      [bot.id]: res.ok ? '✓ Webhook removido' : `✗ ${data.error}`,
-    }));
+    console.log('[BotsPanel] removeWebhook', bot.id);
+    try {
+      const res = await fetch(`/api/bots/${bot.id}/webhook`, { method: 'DELETE' });
+      const data = await res.json();
+      console.log('[BotsPanel] removeWebhook response:', res.status, data);
+      setWebhookStatus((s) => ({
+        ...s,
+        [bot.id]: res.ok ? '✓ Webhook removido' : `✗ ${data.error ?? 'erro desconhecido'}`,
+      }));
+    } catch (err) {
+      console.error('[BotsPanel] removeWebhook error:', err);
+      setWebhookStatus((s) => ({ ...s, [bot.id]: `✗ Erro de rede` }));
+    }
   };
 
   return (
@@ -137,12 +213,13 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                         <span className="text-xs text-gray-400">@{bot.username}</span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500 font-mono mt-0.5">{maskToken(bot.token)}</div>
+                    <div className="text-xs text-gray-500 font-mono mt-0.5">
+                      {maskToken(bot.token)}
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {/* Toggle active */}
                   <button
                     onClick={() => toggleActive(bot)}
                     className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
@@ -168,10 +245,9 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                 </div>
               </div>
 
-              {/* Webhook controls */}
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => setWebhook(bot)}
+                  onClick={() => registerWebhook(bot)}
                   disabled={webhookStatus[bot.id] === 'loading'}
                   className="px-3 py-1 text-xs bg-blue-900 hover:bg-blue-800 text-blue-300 rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -186,7 +262,7 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                 </button>
                 {webhookStatus[bot.id] && webhookStatus[bot.id] !== 'loading' && (
                   <span
-                    className={`text-xs truncate max-w-xs ${
+                    className={`text-xs break-all ${
                       webhookStatus[bot.id].startsWith('✓') ? 'text-emerald-400' : 'text-red-400'
                     }`}
                   >
@@ -199,26 +275,33 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
         </div>
       )}
 
-      {/* Modal */}
+      {/* ── Modal ─────────────────────────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}
+        >
           <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
             <h3 className="text-lg font-semibold text-white mb-4">
               {editBot ? 'Editar Bot' : 'Adicionar Bot'}
             </h3>
 
             <div className="space-y-4">
+              {/* Name */}
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Nome do bot</label>
                 <input
+                  autoFocus
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                   placeholder="Ex: Bot Reações 1"
                   className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
+              {/* Token (add only) */}
               {!editBot && (
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">
@@ -228,7 +311,8 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                     type="text"
                     value={form.token}
                     onChange={(e) => setForm((f) => ({ ...f, token: e.target.value.trim() }))}
-                    placeholder="123456789:ABCdef..."
+                    onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                    placeholder="123456789:ABCdef…"
                     className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-emerald-500"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -237,12 +321,14 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                 </div>
               )}
 
+              {/* Default emoji */}
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Emoji padrão</label>
                 <div className="flex flex-wrap gap-2">
                   {EMOJI_OPTIONS.map((emoji) => (
                     <button
                       key={emoji}
+                      type="button"
                       onClick={() => setForm((f) => ({ ...f, defaultEmoji: emoji }))}
                       className={`text-xl w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
                         form.defaultEmoji === emoji
@@ -256,23 +342,40 @@ export default function BotsPanel({ bots, onRefresh }: Props) {
                 </div>
               </div>
 
+              {/* Error box */}
               {error && (
-                <p className="text-sm text-red-400 bg-red-900/30 rounded-lg px-3 py-2">{error}</p>
+                <div className="text-sm text-red-300 bg-red-900/40 border border-red-700/50 rounded-lg px-3 py-2">
+                  ✗ {error}
+                </div>
+              )}
+
+              {/* Saving spinner hint */}
+              {saving && (
+                <div className="text-sm text-gray-400 flex items-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-emerald-400 rounded-full animate-spin" />
+                  Validando token com o Telegram…
+                </div>
               )}
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
+                type="button"
                 onClick={closeModal}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                disabled={saving}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-40"
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleSubmit}
                 disabled={saving}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
               >
+                {saving && (
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                )}
                 {saving ? 'Salvando…' : editBot ? 'Salvar' : 'Adicionar'}
               </button>
             </div>
