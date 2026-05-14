@@ -3,11 +3,13 @@ import { useRef, useState } from 'react';
 
 export type MediaKind = 'image' | 'video' | 'audio' | 'file';
 
+// Cloudinary unsigned uploads require resource-type specific endpoints.
+// /auto/upload only works with signed (API-key) requests.
 const KIND_CONFIG = {
-  image: { accept: 'image/jpeg,image/png,image/gif,image/webp', maxMb: 10,  icon: '🖼️', hint: 'JPG, PNG, GIF, WebP · máx 10 MB' },
-  video: { accept: 'video/mp4,video/quicktime,video/webm',      maxMb: 100, icon: '🎬', hint: 'MP4, MOV, WebM · máx 100 MB' },
-  audio: { accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a', maxMb: 20, icon: '🎵', hint: 'MP3, WAV, OGG, M4A · máx 20 MB' },
-  file:  { accept: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.txt,.csv',  maxMb: 50, icon: '📎', hint: 'PDF, DOC, XLS, ZIP, TXT · máx 50 MB' },
+  image: { accept: 'image/jpeg,image/png,image/gif,image/webp', maxMb: 10,  endpoint: 'image', icon: '🖼️', hint: 'JPG, PNG, GIF, WebP · máx 10 MB' },
+  video: { accept: 'video/mp4,video/quicktime,video/webm',      maxMb: 100, endpoint: 'video', icon: '🎬', hint: 'MP4, MOV, WebM · máx 100 MB' },
+  audio: { accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a', maxMb: 20, endpoint: 'video', icon: '🎵', hint: 'MP3, WAV, OGG, M4A · máx 20 MB' },
+  file:  { accept: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.txt,.csv',  maxMb: 50, endpoint: 'raw',   icon: '📎', hint: 'PDF, DOC, XLS, ZIP, TXT · máx 50 MB' },
 } as const;
 
 interface Props {
@@ -50,19 +52,17 @@ export default function MediaUploadField({ kind, url, caption, onUrlChange, onCa
     setError('');
     setUploading(true);
 
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
-
-    console.log('[MediaUpload] cloud_name :', cloudName);
-    console.log('[MediaUpload] preset     :', preset);
-    console.log('[MediaUpload] url        :', uploadUrl);
-    console.log('[MediaUpload] file       :', file.name, file.type, `${(file.size / 1024).toFixed(1)} KB`);
+    // Unsigned uploads only work on resource-type specific endpoints.
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${cfg.endpoint}/upload`;
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', preset!);
 
-    // Log FormData keys to confirm nothing extra is attached
-    console.log('[MediaUpload] FormData keys:', [...formData.keys()]);
+    console.log('[MediaUpload] endpoint    :', uploadUrl);
+    console.log('[MediaUpload] preset      :', preset);
+    console.log('[MediaUpload] FormData keys:', [...formData.keys()]); // must be: ['file', 'upload_preset']
+    console.log('[MediaUpload] file        :', file.name, file.type, `${(file.size / 1024).toFixed(1)} KB`);
 
     const controller = new AbortController();
     abortRef.current = controller;
