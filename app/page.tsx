@@ -5,11 +5,13 @@ import BotsPanel from '@/components/BotsPanel';
 import ConfigPanel from '@/components/ConfigPanel';
 import LogsPanel from '@/components/LogsPanel';
 import SetupPanel from '@/components/SetupPanel';
+import FlowsPanel from '@/components/FlowsPanel';
 
-type Tab = 'bots' | 'config' | 'logs' | 'setup';
+type Tab = 'bots' | 'flows' | 'config' | 'logs' | 'setup';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'bots',   label: 'Bots',          icon: '🤖' },
+  { id: 'flows',  label: 'Fluxos',        icon: '🔀' },
   { id: 'config', label: 'Configurações', icon: '⚙️' },
   { id: 'logs',   label: 'Logs',          icon: '📋' },
   { id: 'setup',  label: 'Como usar',     icon: '📖' },
@@ -86,6 +88,11 @@ export default function Home() {
                     {bots.length}
                   </span>
                 )}
+                {t.id === 'flows' && (
+                  <span className="text-xs bg-emerald-900/70 text-emerald-400 rounded-full px-1.5 py-0.5 leading-none">
+                    novo
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -96,6 +103,9 @@ export default function Home() {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {tab === 'bots' && (
           <BotsPanel bots={bots} onRefresh={fetchBots} />
+        )}
+        {tab === 'flows' && (
+          <FlowsPanel bots={bots} />
         )}
         {tab === 'config' && (
           <ConfigPanel config={config} onSaved={setConfig} />

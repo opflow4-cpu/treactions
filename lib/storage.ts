@@ -1,10 +1,12 @@
 import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog } from './types';
+import { Flow } from './flow-types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_LOGS = 500;
 const BOTS_KEY   = 'treactions:bots';
 const CONFIG_KEY = 'treactions:config';
 const LOGS_KEY   = 'treactions:logs';
+const FLOWS_KEY  = 'treactions:flows';
 
 // ── Storage interface ─────────────────────────────────────────────────────────
 
@@ -261,4 +263,20 @@ export async function markReacted(
 ): Promise<void> {
   const key = `treactions:rx:${chatId}:${messageId}:${botId}`;
   await getKV().set(key, true, Math.floor(REACTION_TTL_MS / 1000));
+}
+
+// ── Flows ─────────────────────────────────────────────────────────────────────
+
+export async function getFlows(): Promise<Flow[]> {
+  try {
+    const raw = await getKV().get<unknown>(FLOWS_KEY);
+    return toArray<Flow>(raw);
+  } catch (err) {
+    console.error('[storage] getFlows FAILED (returning []):', err);
+    return [];
+  }
+}
+
+export async function saveFlows(flows: Flow[]): Promise<void> {
+  await getKV().set(FLOWS_KEY, flows);
 }
