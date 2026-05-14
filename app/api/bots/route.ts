@@ -4,25 +4,48 @@ import { getMe } from '@/lib/telegram';
 import { Bot } from '@/lib/types';
 
 export async function GET() {
-  const bots = await getBots();
-  return NextResponse.json(bots);
+  try {
+    const bots = await getBots();
+    console.log(`[GET /api/bots] returning ${bots.length} bots`);
+    return NextResponse.json(bots);
+  } catch (err) {
+    console.error('[GET /api/bots] storage error:', err);
+    return NextResponse.json({ error: 'Falha ao ler bots do storage' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as { name: string; token: string; defaultEmoji: string };
+  let body: { name?: string; token?: string; defaultEmoji?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Body JSON inválido' }, { status: 400 });
+  }
+
   const { name, token, defaultEmoji } = body;
 
   if (!name?.trim() || !token?.trim()) {
-    return NextResponse.json({ error: 'name and token are required' }, { status: 400 });
+    return NextResponse.json({ error: 'name e token são obrigatórios' }, { status: 400 });
   }
 
   // Validate token with Telegram
+  console.log('[POST /api/bots] validating token with Telegram…');
   const info = await getMe(token.trim());
   if (!info.ok) {
+    console.error('[POST /api/bots] invalid token:', info.error);
     return NextResponse.json({ error: `Token inválido: ${info.error}` }, { status: 400 });
   }
+  console.log('[POST /api/bots] token valid, bot username:', info.username);
 
-  const bots = await getBots();
+  // Load current list
+  let bots: Bot[];
+  try {
+    bots = await getBots();
+  } catch (err) {
+    console.error('[POST /api/bots] failed to read existing bots:', err);
+    return NextResponse.json({ error: 'Falha ao ler bots do storage' }, { status: 500 });
+  }
+  console.log(`[POST /api/bots] bots before insert: ${bots.length}`);
 
   // Prevent duplicate tokens
   if (bots.some((b) => b.token === token.trim())) {
@@ -40,7 +63,18 @@ export async function POST(req: NextRequest) {
   };
 
   bots.push(newBot);
-  await saveBots(bots);
 
+  // Save — if this throws, we return 500 instead of fake 201
+  try {
+    await saveBots(bots);
+  } catch (err) {
+    console.error('[POST /api/bots] saveBots FAILED:', err);
+    return NextResponse.json(
+      { error: `Falha ao salvar no storage: ${err instanceof Error ? err.message : String(err)}` },
+      { status: 500 },
+    );
+  }
+
+  console.log(`[POST /api/bots] bots after insert: ${bots.length} — new bot id: ${newBot.id}`);
   return NextResponse.json(newBot, { status: 201 });
 }

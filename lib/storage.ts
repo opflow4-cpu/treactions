@@ -2,6 +2,9 @@ import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog } from './types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_LOGS = 500;
+const BOTS_KEY = 'treactions:bots';
+const CONFIG_KEY = 'treactions:config';
+const LOGS_KEY = 'treactions:logs';
 
 // ── Storage backends ──────────────────────────────────────────────────────────
 
@@ -10,36 +13,57 @@ interface KV {
   set<T>(key: string, value: T, exSeconds?: number): Promise<void>;
 }
 
-// Upstash Redis via HTTP REST API (no native deps)
+// ── Upstash Redis (production) ────────────────────────────────────────────────
+// Uses the body-based command format: POST / with body ["COMMAND", ...args]
+// This avoids URL-length limits that break the path-based format for large values.
 class UpstashKV implements KV {
   constructor(private url: string, private token: string) {}
 
-  async get<T>(key: string): Promise<T | null> {
-    const res = await fetch(`${this.url}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${this.token}` },
+  private async cmd(command: (string | number)[]): Promise<unknown> {
+    const res = await fetch(this.url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(command),
       cache: 'no-store',
     });
-    const json = (await res.json()) as { result: string | null };
-    if (json.result === null || json.result === undefined) return null;
+
+    let data: { result?: unknown; error?: string };
     try {
-      return JSON.parse(json.result) as T;
+      data = await res.json();
     } catch {
-      return json.result as unknown as T;
+      throw new Error(`Upstash: invalid JSON response (HTTP ${res.status})`);
+    }
+
+    if (!res.ok || data.error) {
+      throw new Error(`Upstash error: ${data.error ?? res.statusText}`);
+    }
+
+    return data.result;
+  }
+
+  async get<T>(key: string): Promise<T | null> {
+    const result = await this.cmd(['GET', key]);
+    if (result === null || result === undefined) return null;
+    // Upstash returns stored string; we always store JSON.stringify'd values
+    try {
+      return JSON.parse(result as string) as T;
+    } catch {
+      return result as T;
     }
   }
 
   async set<T>(key: string, value: T, exSeconds?: number): Promise<void> {
     const serialized = JSON.stringify(value);
-    const parts = [encodeURIComponent(key), encodeURIComponent(serialized)];
-    if (exSeconds) parts.push('ex', String(exSeconds));
-    await fetch(`${this.url}/set/${parts.join('/')}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.token}` },
-    });
+    const cmd: (string | number)[] = ['SET', key, serialized];
+    if (exSeconds) cmd.push('EX', exSeconds);
+    await this.cmd(cmd); // throws if Upstash rejects
   }
 }
 
-// JSON file storage for local development
+// ── File-based storage (local development) ────────────────────────────────────
 class FileKV implements KV {
   private data: Record<string, { value: unknown; exAt?: number }> = {};
   private filePath = '.treactions-data.json';
@@ -82,14 +106,18 @@ class FileKV implements KV {
   }
 }
 
+// ── Singleton ─────────────────────────────────────────────────────────────────
 function createKV(): KV {
   const url = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (url && token) return new UpstashKV(url, token);
+  if (url && token) {
+    console.log('[storage] using Upstash Redis at', url.slice(0, 40) + '…');
+    return new UpstashKV(url, token);
+  }
+  console.log('[storage] no KV env vars found — using local file storage');
   return new FileKV();
 }
 
-// Singleton – reused across hot-reloads in dev
 const globalKV = global as typeof global & { __treactions_kv?: KV };
 if (!globalKV.__treactions_kv) globalKV.__treactions_kv = createKV();
 const kv = globalKV.__treactions_kv;
@@ -97,34 +125,38 @@ const kv = globalKV.__treactions_kv;
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function getBots(): Promise<Bot[]> {
-  return (await kv.get<Bot[]>('tr:bots')) ?? [];
+  const bots = (await kv.get<Bot[]>(BOTS_KEY)) ?? [];
+  console.log(`[storage] getBots → ${bots.length} bots`);
+  return bots;
 }
 
 export async function saveBots(bots: Bot[]): Promise<void> {
-  await kv.set('tr:bots', bots);
+  console.log(`[storage] saveBots → saving ${bots.length} bots with key "${BOTS_KEY}"`);
+  await kv.set(BOTS_KEY, bots); // throws on failure — callers must handle
+  console.log(`[storage] saveBots → done`);
 }
 
 export async function getConfig(): Promise<GlobalConfig> {
-  return (await kv.get<GlobalConfig>('tr:config')) ?? { ...DEFAULT_CONFIG };
+  return (await kv.get<GlobalConfig>(CONFIG_KEY)) ?? { ...DEFAULT_CONFIG };
 }
 
 export async function saveConfig(config: GlobalConfig): Promise<void> {
-  await kv.set('tr:config', config);
+  await kv.set(CONFIG_KEY, config);
 }
 
 export async function getLogs(): Promise<ReactionLog[]> {
-  return (await kv.get<ReactionLog[]>('tr:logs')) ?? [];
+  return (await kv.get<ReactionLog[]>(LOGS_KEY)) ?? [];
 }
 
 export async function appendLog(log: ReactionLog): Promise<void> {
   const logs = await getLogs();
   logs.unshift(log);
   if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
-  await kv.set('tr:logs', logs);
+  await kv.set(LOGS_KEY, logs);
 }
 
 export async function clearLogs(): Promise<void> {
-  await kv.set('tr:logs', []);
+  await kv.set(LOGS_KEY, []);
 }
 
 export async function hasReacted(
@@ -132,7 +164,7 @@ export async function hasReacted(
   messageId: number,
   botId: string,
 ): Promise<boolean> {
-  const key = `tr:rx:${chatId}:${messageId}:${botId}`;
+  const key = `treactions:rx:${chatId}:${messageId}:${botId}`;
   return (await kv.get<boolean>(key)) === true;
 }
 
@@ -141,6 +173,6 @@ export async function markReacted(
   messageId: number,
   botId: string,
 ): Promise<void> {
-  const key = `tr:rx:${chatId}:${messageId}:${botId}`;
+  const key = `treactions:rx:${chatId}:${messageId}:${botId}`;
   await kv.set(key, true, Math.floor(REACTION_TTL_MS / 1000));
 }
