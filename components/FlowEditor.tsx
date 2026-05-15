@@ -46,6 +46,7 @@ const NEON: Record<BlockType, { hex: string; minimap: string }> = {
   document: { hex: '#14b8a6', minimap: '#0d9488' },
   buttons:  { hex: '#10b981', minimap: '#059669' },
   delay:    { hex: '#64748b', minimap: '#475569' },
+  downsell: { hex: '#ef4444', minimap: '#dc2626' },
 };
 
 // ── Editor context (shared callbacks, avoids functions in edge data) ───────────
@@ -651,7 +652,7 @@ const edgeTypes = { flowEdge: FlowEdge };
 
 // ── Block palette sidebar ─────────────────────────────────────────────────────
 
-const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'typing', 'image', 'video', 'audio', 'document', 'buttons', 'delay'];
+const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'typing', 'image', 'video', 'audio', 'document', 'buttons', 'downsell', 'delay'];
 
 function BlockPalette({ onAdd, collapsed, onToggle }: { onAdd: (t: BlockType) => void; collapsed: boolean; onToggle: () => void }) {
   return (
