@@ -69,17 +69,15 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Tab bar — zero legacy CSS, plain flex */}
+      {/* Tab bar — flex wrap garante que TODOS os botões apareçam sempre */}
       <div style={{ borderBottom: '1px solid #1f2937', background: '#111827' }}>
-        <div style={{ display: 'flex', overflowX: 'auto', gap: 4, padding: '0 16px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', padding: '0 8px' }}>
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-                padding: '12px 14px',
+                padding: '11px 14px',
                 fontSize: 14,
                 fontWeight: 500,
                 background: 'transparent',
@@ -87,6 +85,7 @@ export default function Home() {
                 borderBottom: tab === t.id ? '2px solid #10b981' : '2px solid transparent',
                 color: tab === t.id ? '#34d399' : '#6b7280',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               {t.icon} {t.label}
