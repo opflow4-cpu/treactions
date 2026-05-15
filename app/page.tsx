@@ -110,6 +110,14 @@ export default function Home() {
         </div>
       </div>
 
+      {/* ── DEBUG STRIP — remove after confirming production has schedules ── */}
+      <div style={{ background: '#1a1a2e', borderBottom: '2px solid #6366f1', padding: '6px 16px', fontSize: 11, color: '#a5b4fc', fontFamily: 'monospace' }}>
+        BUILD DEBUG: schedules enabled — commit 3e5f15d
+        &nbsp;|&nbsp;
+        Tabs carregadas: {TABS.map(t => t.id).join(', ')}
+      </div>
+      {/* ── END DEBUG ─────────────────────────────────────────────────────── */}
+
       {/* Main content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {tab === 'bots' && (
