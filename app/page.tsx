@@ -143,7 +143,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-gray-800 text-center text-xs text-gray-600 py-4">
-        TReactions — Bots oficiais do Telegram via BotFather · Webhook · Sem contas pessoais
+        TReactions — Bots oficiais do Telegram via BotFather · Webhook · Sem contas pessoais · v2
       </footer>
     </div>
   );
