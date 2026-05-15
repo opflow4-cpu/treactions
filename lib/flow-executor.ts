@@ -2,7 +2,7 @@ import { Flow, FlowBlock, ButtonsBlock, resolveAction, ACTION_META } from './flo
 import { getFlows, getBots } from './storage';
 import {
   sendMessage, sendPhoto, sendVideo, sendAudio, sendDocument,
-  sendInlineButtons, answerCallbackQuery,
+  sendChatAction, sendInlineButtons, answerCallbackQuery,
   type InlineButton,
 } from './telegram';
 
@@ -45,6 +45,20 @@ async function execBlock(token: string, chatId: number, block: FlowBlock, flow: 
     case 'document':
       if (block.url) await sendDocument(token, chatId, block.url, block.caption || undefined);
       return 'continue';
+
+    case 'typing': {
+      // Telegram's typing indicator disappears after ~5s, so refresh every 4s for longer durations
+      const totalMs = Math.min(block.seconds * 1000, 25_000);
+      const REFRESH = 4_000;
+      let remaining = totalMs;
+      while (remaining > 0) {
+        await sendChatAction(token, chatId, 'typing');
+        const wait = Math.min(remaining, REFRESH);
+        await new Promise((r) => setTimeout(r, wait));
+        remaining -= wait;
+      }
+      return 'continue';
+    }
 
     case 'delay': {
       const ms = Math.min(block.seconds * 1000, 25_000); // cap at 25s (serverless limit)

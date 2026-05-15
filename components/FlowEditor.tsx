@@ -29,7 +29,7 @@ import {
 import {
   Flow, FlowBlock, BlockType, ButtonsBlock, ButtonOption, ButtonActionType, ButtonAction,
   BLOCK_META, ACTION_META, blockSummary, createBlock, resolveAction, defaultAction,
-  TriggerBlock, TextBlock, ImageBlock, VideoBlock, AudioBlock, DocumentBlock, DelayBlock,
+  TriggerBlock, TextBlock, TypingBlock, ImageBlock, VideoBlock, AudioBlock, DocumentBlock, DelayBlock,
 } from '@/lib/flow-types';
 import MediaUploadField from './MediaUploadField';
 import { Bot } from '@/lib/types';
@@ -39,6 +39,7 @@ import { Bot } from '@/lib/types';
 const NEON: Record<BlockType, { hex: string; minimap: string }> = {
   trigger:  { hex: '#f59e0b', minimap: '#d97706' },
   text:     { hex: '#3b82f6', minimap: '#2563eb' },
+  typing:   { hex: '#06b6d4', minimap: '#0891b2' },
   image:    { hex: '#8b5cf6', minimap: '#7c3aed' },
   video:    { hex: '#ec4899', minimap: '#db2777' },
   audio:    { hex: '#f97316', minimap: '#ea580c' },
@@ -370,6 +371,37 @@ function ButtonsEditor({
   );
 }
 
+const TYPING_PRESETS = [2, 3, 5, 10];
+
+function TypingEditor({ block, onChange }: { block: TypingBlock; onChange: (b: TypingBlock) => void }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-gray-500 leading-relaxed">
+        Mostra &quot;digitando…&quot; no Telegram antes de enviar a próxima mensagem.
+        Para durações acima de 5s o indicador é renovado automaticamente.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        {TYPING_PRESETS.map((s) => (
+          <button key={s} type="button" onClick={() => onChange({ ...block, seconds: s })}
+            className="px-3 py-1 text-xs rounded-full border transition-colors"
+            style={block.seconds === s
+              ? { background: 'rgba(6,182,212,0.12)', borderColor: 'rgba(6,182,212,0.6)', color: '#67e8f9' }
+              : { borderColor: 'rgba(75,85,99,0.5)', color: '#6b7280' }}>
+            {s}s
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-3">
+        <label className="text-xs text-gray-400 shrink-0">Personalizado:</label>
+        <input type="number" min={1} max={25} value={block.seconds}
+          onChange={(e) => onChange({ ...block, seconds: Math.max(1, Math.min(25, Number(e.target.value))) })}
+          className="w-20 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-cyan-500/60" />
+        <span className="text-xs text-gray-600">segundos (máx 25s)</span>
+      </div>
+    </div>
+  );
+}
+
 const DELAY_PRESETS = [3, 5, 10, 15, 30, 60];
 function DelayEditor({ block, onChange }: { block: DelayBlock; onChange: (b: DelayBlock) => void }) {
   return (
@@ -619,7 +651,7 @@ const edgeTypes = { flowEdge: FlowEdge };
 
 // ── Block palette sidebar ─────────────────────────────────────────────────────
 
-const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'image', 'video', 'audio', 'document', 'buttons', 'delay'];
+const BLOCK_ORDER: BlockType[] = ['trigger', 'text', 'typing', 'image', 'video', 'audio', 'document', 'buttons', 'delay'];
 
 function BlockPalette({ onAdd, collapsed, onToggle }: { onAdd: (t: BlockType) => void; collapsed: boolean; onToggle: () => void }) {
   return (
@@ -685,6 +717,7 @@ function NodeInspector({ block, onUpdate, onDelete, onClose, flows }: {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {block.type === 'trigger' && <TriggerEditor block={block} onChange={(b) => onUpdate(b)} />}
         {block.type === 'text'    && <TextEditor    block={block} onChange={(b) => onUpdate(b)} />}
+        {block.type === 'typing'  && <TypingEditor  block={block as TypingBlock} onChange={(b) => onUpdate(b)} />}
         {block.type === 'image' && (
           <MediaUploadField
             kind="image"

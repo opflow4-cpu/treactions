@@ -1,6 +1,7 @@
 export type BlockType =
   | 'trigger'
   | 'text'
+  | 'typing'
   | 'image'
   | 'video'
   | 'audio'
@@ -65,6 +66,12 @@ export interface TextBlock {
   content: string;
 }
 
+export interface TypingBlock {
+  id: string;
+  type: 'typing';
+  seconds: number;
+}
+
 export interface ImageBlock {
   id: string;
   type: 'image';
@@ -117,6 +124,7 @@ export interface DelayBlock {
 export type FlowBlock =
   | TriggerBlock
   | TextBlock
+  | TypingBlock
   | ImageBlock
   | VideoBlock
   | AudioBlock
@@ -153,6 +161,12 @@ export const BLOCK_META: Record<
     label: 'Texto',
     description: 'Envia uma mensagem de texto',
     color: 'text-blue-400',
+  },
+  typing: {
+    icon: '⌨️',
+    label: 'Digitando',
+    description: 'Simula que o bot está digitando antes da próxima mensagem',
+    color: 'text-cyan-400',
   },
   image: {
     icon: '🖼️',
@@ -203,6 +217,8 @@ export function blockSummary(block: FlowBlock): string {
     case 'image':
     case 'video':
       return block.url ? block.url.slice(0, 48) + '…' : 'sem URL';
+    case 'typing':
+      return `${block.seconds}s digitando`;
     case 'audio':
       return block.url ? block.url.slice(0, 48) + '…' : 'sem URL';
     case 'document':
@@ -219,6 +235,7 @@ export function createBlock(type: BlockType): FlowBlock {
   switch (type) {
     case 'trigger':  return { id, type: 'trigger', keyword: '', matchType: 'contains' };
     case 'text':     return { id, type: 'text', content: '' };
+    case 'typing':   return { id, type: 'typing', seconds: 3 };
     case 'image':    return { id, type: 'image', url: '', caption: '' };
     case 'video':    return { id, type: 'video', url: '', caption: '' };
     case 'audio':    return { id, type: 'audio', url: '' };

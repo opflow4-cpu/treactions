@@ -59,6 +59,15 @@ export async function sendReaction(
   return { ok: data.ok, error: data.description };
 }
 
+export async function sendChatAction(
+  token: string,
+  chatId: number | string,
+  action: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const data = await tgPost(token, 'sendChatAction', { chat_id: chatId, action });
+  return { ok: data.ok, error: data.description };
+}
+
 export async function sendMessage(
   token: string,
   chatId: number | string,
