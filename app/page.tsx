@@ -17,6 +17,11 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'setup',  label: 'Como usar',     icon: '📖' },
 ];
 
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = '/login';
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>('bots');
   const [bots, setBots] = useState<Bot[]>([]);
@@ -50,19 +55,44 @@ export default function Home() {
             <span className="text-2xl">⚡</span>
             <span className="font-bold text-white text-lg tracking-tight">TReactions</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                activeBots > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'
-              }`}
-            />
-            <span>
-              {loadingBots
-                ? '…'
-                : activeBots > 0
-                ? `${activeBots} bot${activeBots !== 1 ? 's' : ''} ativo${activeBots !== 1 ? 's' : ''}`
-                : 'Nenhum bot ativo'}
-            </span>
+          <div className="flex items-center gap-3 text-sm text-gray-400">
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  activeBots > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'
+                }`}
+              />
+              <span>
+                {loadingBots
+                  ? '…'
+                  : activeBots > 0
+                  ? `${activeBots} bot${activeBots !== 1 ? 's' : ''} ativo${activeBots !== 1 ? 's' : ''}`
+                  : 'Nenhum bot ativo'}
+              </span>
+            </div>
+            <button
+              onClick={logout}
+              style={{
+                padding: '4px 12px',
+                fontSize: 12,
+                fontWeight: 500,
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'transparent',
+                color: '#6b7280',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLButtonElement).style.color = '#f87171';
+                (e.target as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLButtonElement).style.color = '#6b7280';
+                (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.1)';
+              }}
+            >
+              Sair
+            </button>
           </div>
         </div>
       </header>
