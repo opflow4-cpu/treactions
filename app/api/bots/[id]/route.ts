@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
 
   const body = (await req.json()) as Partial<Bot>;
   // Only allow updating safe fields
-  const allowed: (keyof Bot)[] = ['name', 'active', 'defaultEmoji'];
+  const allowed: (keyof Bot)[] = ['name', 'active', 'defaultEmoji', 'onboarding'];
   for (const key of allowed) {
     if (key in body) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
