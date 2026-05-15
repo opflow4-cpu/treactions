@@ -19,6 +19,12 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'setup',     label: 'Como usar',     icon: '📖' },
 ];
 
+// ── EXTREME DEBUG — log TABS on every render ────────────────────────────────
+if (typeof window !== 'undefined') {
+  console.log('TABS DEBUG', TABS);
+  console.log('TABS has schedules?', TABS.some(t => t.id === 'schedules'));
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>('bots');
   const [bots, setBots] = useState<Bot[]>([]);
@@ -149,13 +155,41 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ── DEBUG STRIP — remove after confirming production has schedules ── */}
-      <div style={{ background: '#1a1a2e', borderBottom: '2px solid #6366f1', padding: '6px 16px', fontSize: 11, color: '#a5b4fc', fontFamily: 'monospace' }}>
-        BUILD DEBUG: schedules enabled — commit 3e5f15d
-        &nbsp;|&nbsp;
-        Tabs carregadas: {TABS.map(t => t.id).join(', ')}
+      {/* ══ EXTREME DEBUG — commit 542f3a2 ══════════════════════════════════ */}
+      <div style={{ background: '#0f172a', border: '2px solid #f59e0b', margin: 8, borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}>
+        <div style={{ color: '#fbbf24', fontWeight: 700, marginBottom: 6 }}>
+          🔍 DEBUG — commit 542f3a2
+        </div>
+        <div style={{ color: '#94a3b8', marginBottom: 4 }}>
+          TABS.length = <strong style={{ color: '#fff' }}>{TABS.length}</strong>
+          &nbsp;|&nbsp;
+          schedules presente? <strong style={{ color: TABS.some(t => t.id === 'schedules') ? '#4ade80' : '#f87171' }}>
+            {TABS.some(t => t.id === 'schedules') ? 'SIM ✓' : 'NÃO ✗'}
+          </strong>
+        </div>
+        <div style={{ color: '#64748b', marginBottom: 8, wordBreak: 'break-all' }}>
+          JSON: {JSON.stringify(TABS.map(t => t.id))}
+        </div>
+        {/* botão hardcoded fora do map — se este aparecer mas o menu não, é CSS */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: '#64748b', fontSize: 11 }}>Botões hardcoded:</span>
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                background: tab === t.id ? '#6366f1' : '#1e293b',
+                color: tab === t.id ? '#fff' : '#94a3b8',
+                border: '1px solid #334155',
+              }}
+            >
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
       </div>
-      {/* ── END DEBUG ─────────────────────────────────────────────────────── */}
+      {/* ══ END EXTREME DEBUG ═══════════════════════════════════════════════ */}
 
       {/* Main content */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
