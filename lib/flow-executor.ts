@@ -1,5 +1,10 @@
 import { Flow, FlowBlock, ButtonsBlock, resolveAction, ACTION_META } from './flow-types';
-import { getFlows, getBots } from './storage';
+import {
+  getFlows, getBots,
+  getPendingDownsellQueue, savePendingDownsellQueue,
+  enqueuePendingDownsell, cancelPendingDownsellsForChat,
+  type PendingDownsell,
+} from './storage';
 import {
   sendMessage, sendPhoto, sendVideo, sendAudio, sendDocument,
   sendChatAction, sendInlineButtons, answerCallbackQuery,
@@ -61,9 +66,26 @@ async function execBlock(token: string, chatId: number, block: FlowBlock, flow: 
     }
 
     case 'delay': {
-      const ms = Math.min(block.seconds * 1000, 25_000); // cap at 25s (serverless limit)
-      await new Promise((r) => setTimeout(r, ms));
+      const value = block.delayValue ?? block.seconds ?? 5;
+      const unit  = block.delayUnit  ?? 'seconds';
+      const mult  = { seconds: 1_000, minutes: 60_000, hours: 3_600_000 } as const;
+      await new Promise((r) => setTimeout(r, value * mult[unit]));
       return 'continue';
+    }
+
+    case 'downsell': {
+      const pdl: PendingDownsell = {
+        id: `pdl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        chatId,
+        botToken: token,
+        flowId: flow.id,
+        blockId: block.id,
+        fireAt: Date.now() + block.delayMinutes * 60_000,
+        sent: false,
+        block,
+      };
+      await enqueuePendingDownsell(pdl);
+      return 'stop'; // flow pauses; cron will send the message
     }
 
     case 'buttons': {
@@ -104,6 +126,72 @@ export async function executeFlowFrom(
   }
 }
 
+// ── Execute a pending downsell (called by cron) ───────────────────────────────
+
+export async function executeDownsell(pdl: PendingDownsell): Promise<void> {
+  const { botToken, chatId, block } = pdl;
+
+  // Optional typing simulation
+  if (block.typingSeconds > 0) {
+    const totalMs = Math.min(block.typingSeconds * 1_000, 10_000);
+    let rem = totalMs;
+    while (rem > 0) {
+      await sendChatAction(botToken, chatId, 'typing');
+      const wait = Math.min(rem, 4_000);
+      await new Promise((r) => setTimeout(r, wait));
+      rem -= wait;
+    }
+  }
+
+  // Optional media
+  if (block.mediaUrl) {
+    if      (block.mediaType === 'image') await sendPhoto(botToken, chatId, block.mediaUrl);
+    else if (block.mediaType === 'video') await sendVideo(botToken, chatId, block.mediaUrl);
+    else if (block.mediaType === 'audio') await sendAudio(botToken, chatId, block.mediaUrl);
+    else                                  await sendDocument(botToken, chatId, block.mediaUrl);
+  }
+
+  // Message with accept/refuse buttons
+  const rows: InlineButton[][] = [
+    [{ text: block.buttonText || 'Sim, quero!', callback_data: `@ds:${pdl.id}:accepted` }],
+    [{ text: 'Não, obrigado',                   callback_data: `@ds:${pdl.id}:refused`  }],
+  ];
+  await sendInlineButtons(botToken, chatId, block.message || '.', rows);
+}
+
+// ── Downsell callback handler ─────────────────────────────────────────────────
+
+async function handleDownsellCallback(
+  botToken: string,
+  callbackQueryId: string,
+  chatId: number,
+  data: string,
+): Promise<void> {
+  // data format: @ds:{pdlId}:{accepted|refused}
+  const parts   = data.slice(4).split(':'); // strip '@ds:'
+  const pdlId   = parts.slice(0, -1).join(':');
+  const outcome = parts[parts.length - 1] as 'accepted' | 'refused';
+
+  await answerCallbackQuery(botToken, callbackQueryId);
+
+  const queue = await getPendingDownsellQueue();
+  const pdl   = queue.find((d) => d.id === pdlId);
+  if (!pdl) return;
+
+  // Remove from queue
+  await savePendingDownsellQueue(queue.filter((d) => d.id !== pdlId));
+
+  // Route to the appropriate branch
+  const targetBlockId = pdl.block.branching[outcome];
+  if (!targetBlockId) return;
+
+  const flows = await getFlows();
+  const flow  = flows.find((f) => f.id === pdl.flowId);
+  if (!flow) return;
+
+  await executeFlowFrom(botToken, chatId, flow, targetBlockId);
+}
+
 // ── Match message text against a trigger block ────────────────────────────────
 
 function matchesTrigger(text: string, keyword: string, matchType: 'exact' | 'contains' | 'starts'): boolean {
@@ -122,6 +210,9 @@ export async function handleFlowMessage(
   chatId: number,
   text: string,
 ): Promise<void> {
+  // Cancel any pending (not-yet-sent) downsells when user messages
+  await cancelPendingDownsellsForChat(chatId).catch(() => {});
+
   const flows = await getFlows();
   const bots = await getBots();
   const bot = bots.find((b) => b.token === botToken);
@@ -151,6 +242,15 @@ export async function handleFlowCallback(
   chatId: number,
   data: string,
 ): Promise<void> {
+  // Handle downsell callbacks
+  if (data.startsWith('@ds:')) {
+    await handleDownsellCallback(botToken, callbackQueryId, chatId, data);
+    return;
+  }
+
+  // Cancel pending downsells when user clicks any button
+  await cancelPendingDownsellsForChat(chatId).catch(() => {});
+
   const parsed = decodeCallback(data);
   if (!parsed) return;
 

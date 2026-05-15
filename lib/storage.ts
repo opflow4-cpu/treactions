@@ -280,3 +280,45 @@ export async function getFlows(): Promise<Flow[]> {
 export async function saveFlows(flows: Flow[]): Promise<void> {
   await getKV().set(FLOWS_KEY, flows);
 }
+
+// ── Pending Downsells ─────────────────────────────────────────────────────────
+
+export interface PendingDownsell {
+  id: string;          // unique: pdl_${Date.now().toString(36)}
+  chatId: number;
+  botToken: string;
+  flowId: string;
+  blockId: string;
+  fireAt: number;      // unix ms timestamp
+  sent: boolean;       // true once the cron has sent the message
+  block: import('./flow-types').DownsellBlock;
+}
+
+const PDL_KEY = 'treactions:pdl:queue';
+
+export async function getPendingDownsellQueue(): Promise<PendingDownsell[]> {
+  try {
+    const raw = await getKV().get<unknown>(PDL_KEY);
+    return toArray<PendingDownsell>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function savePendingDownsellQueue(queue: PendingDownsell[]): Promise<void> {
+  await getKV().set(PDL_KEY, queue);
+}
+
+export async function enqueuePendingDownsell(pdl: PendingDownsell): Promise<void> {
+  const queue = await getPendingDownsellQueue();
+  queue.push(pdl);
+  await savePendingDownsellQueue(queue);
+}
+
+export async function cancelPendingDownsellsForChat(chatId: number): Promise<void> {
+  const queue = await getPendingDownsellQueue();
+  const filtered = queue.filter((d) => d.chatId !== chatId || d.sent);
+  if (filtered.length !== queue.length) {
+    await savePendingDownsellQueue(filtered);
+  }
+}

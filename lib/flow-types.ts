@@ -7,6 +7,7 @@ export type BlockType =
   | 'audio'
   | 'document'
   | 'buttons'
+  | 'downsell'
   | 'delay';
 
 // ── Button action system ──────────────────────────────────────────────────────
@@ -118,7 +119,24 @@ export interface ButtonsBlock {
 export interface DelayBlock {
   id: string;
   type: 'delay';
-  seconds: number;
+  delayValue: number;
+  delayUnit: 'seconds' | 'minutes' | 'hours';
+  /** @deprecated — backward compat for existing flows that have seconds:number */
+  seconds?: number;
+}
+
+export interface DownsellBlock {
+  id: string;
+  type: 'downsell';
+  offerName: string;
+  message: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'audio' | 'file';
+  buttonText: string;
+  buttonColor: string;
+  delayMinutes: number;
+  typingSeconds: number;
+  branching: { accepted?: string; refused?: string };
 }
 
 export type FlowBlock =
@@ -130,6 +148,7 @@ export type FlowBlock =
   | AudioBlock
   | DocumentBlock
   | ButtonsBlock
+  | DownsellBlock
   | DelayBlock;
 
 // ── Flow ─────────────────────────────────────────────────────────────────────
@@ -198,6 +217,12 @@ export const BLOCK_META: Record<
     description: 'Mensagem com botões de ação',
     color: 'text-emerald-400',
   },
+  downsell: {
+    icon: '🎁',
+    label: 'Downsell',
+    description: 'Oferta de recuperação automática após inatividade',
+    color: 'text-fuchsia-400',
+  },
   delay: {
     icon: '⏱️',
     label: 'Atraso',
@@ -225,8 +250,14 @@ export function blockSummary(block: FlowBlock): string {
       return block.url ? (block.caption || block.url.split('/').pop() || block.url.slice(0, 48)) : 'sem arquivo';
     case 'buttons':
       return `${block.buttons.length} botão(ões)${block.text ? ' — ' + block.text.slice(0, 30) : ''}`;
-    case 'delay':
-      return `${block.seconds}s de espera`;
+    case 'downsell':
+      return block.offerName ? `${block.offerName} · ${block.delayMinutes}min` : `Downsell ${block.delayMinutes}min`;
+    case 'delay': {
+      const v = block.delayValue ?? block.seconds ?? 5;
+      const u = block.delayUnit ?? 'seconds';
+      const lbl = u === 'seconds' ? 's' : u === 'minutes' ? 'min' : 'h';
+      return `${v}${lbl} de espera`;
+    }
   }
 }
 
@@ -245,6 +276,14 @@ export function createBlock(type: BlockType): FlowBlock {
       buttons: [{ id: `btn_${Date.now()}`, label: '', action: { type: 'url', url: '' } }],
       branching: {},
     };
-    case 'delay':    return { id, type: 'delay', seconds: 5 };
+    case 'downsell': return {
+      id, type: 'downsell',
+      offerName: '', message: '',
+      mediaUrl: undefined, mediaType: undefined,
+      buttonText: 'Sim, quero!', buttonColor: '#10b981',
+      delayMinutes: 30, typingSeconds: 3,
+      branching: {},
+    };
+    case 'delay':    return { id, type: 'delay', delayValue: 5, delayUnit: 'seconds' };
   }
 }
