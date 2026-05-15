@@ -472,6 +472,8 @@ export default function SchedulesPanel({ bots }: Props) {
   const [loading, setLoading]     = useState(true);
   const [view, setView]           = useState<'list' | 'form'>('list');
   const [editTarget, setEditTarget] = useState<Partial<ScheduledMessage>>(emptyForm());
+  const [running, setRunning]     = useState(false);
+  const [runResult, setRunResult] = useState<string>('');
 
   const fetchSchedules = useCallback(async () => {
     const res = await fetch('/api/schedules');
@@ -547,6 +549,26 @@ export default function SchedulesPanel({ bots }: Props) {
     await fetchLogs();
   };
 
+  const handleRunCron = async () => {
+    setRunning(true);
+    setRunResult('');
+    try {
+      const res  = await fetch('/api/cron/schedules', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      const sent    = (data.results ?? []).filter((r: { status: string }) => r.status === 'sent').length;
+      const skipped = (data.results ?? []).filter((r: { status: string }) => r.status === 'skipped').length;
+      const errors  = (data.results ?? []).filter((r: { status: string }) => r.status === 'error').length;
+      setRunResult(`✓ ${sent} enviado(s), ${skipped} ignorado(s)${errors ? `, ${errors} erro(s)` : ''}`);
+      await fetchLogs();
+    } catch (e) {
+      setRunResult(`✗ ${e instanceof Error ? e.message : 'Erro'}`);
+    } finally {
+      setRunning(false);
+      setTimeout(() => setRunResult(''), 5000);
+    }
+  };
+
   // ── Stats ──────────────────────────────────────────────────────────────────
 
   const activeCount  = schedules.filter((s) => s.active).length;
@@ -582,11 +604,35 @@ export default function SchedulesPanel({ bots }: Props) {
             Envie mensagens automáticas em grupos nos horários definidos.
           </p>
         </div>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all"
-          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}>
-          + Novo agendamento
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Manual cron trigger — useful on Vercel Hobby or for immediate testing */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRunCron}
+              disabled={running}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl transition-all"
+              style={{
+                background: 'rgba(16,185,129,0.1)',
+                border: '1px solid rgba(16,185,129,0.3)',
+                color: '#34d399',
+                opacity: running ? 0.6 : 1,
+                cursor: running ? 'not-allowed' : 'pointer',
+              }}
+              title="Verifica e dispara agendamentos cujo horário bater agora">
+              {running ? '⏳' : '▶'} Executar agora
+            </button>
+            {runResult && (
+              <span className={`text-xs ${runResult.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>
+                {runResult}
+              </span>
+            )}
+          </div>
+          <button onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all"
+            style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}>
+            + Novo agendamento
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

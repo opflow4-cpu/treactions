@@ -2,19 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSchedules, saveSchedules, getBots, appendScheduleLog } from '@/lib/storage';
 import { executeSchedule, getTimeInTz } from '@/lib/schedule-executor';
 
-// Vercel cron fires this every minute.
-// The Authorization header is sent automatically by Vercel when CRON_SECRET is set.
+// Vercel cron fires GET every minute (Pro) or daily (Hobby).
+// POST is the manual trigger called from the UI dashboard.
 
-export async function GET(req: NextRequest) {
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get('authorization');
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-  }
-
+async function runCron() {
   const [schedules, bots] = await Promise.all([getSchedules(), getBots()]);
   const currentMinuteKey  = Math.floor(Date.now() / 60_000);
 
@@ -62,7 +53,6 @@ export async function GET(req: NextRequest) {
     const result = await executeSchedule(schedule, bots);
 
     if (result.ok) {
-      // Stamp lastFiredAt so next invocation this minute is skipped
       updatedSchedules[i] = { ...schedule, lastFiredAt: Date.now() };
       results.push({ id: schedule.id, name: schedule.name, status: 'sent' });
     } else {
@@ -72,10 +62,28 @@ export async function GET(req: NextRequest) {
 
   // Persist updated lastFiredAt timestamps
   const anyUpdated = updatedSchedules.some((s, i) => s.lastFiredAt !== schedules[i]?.lastFiredAt);
-  if (anyUpdated) {
-    await saveSchedules(updatedSchedules);
-  }
+  if (anyUpdated) await saveSchedules(updatedSchedules);
 
   console.log('[cron/schedules] results:', results);
-  return NextResponse.json({ ok: true, checked: schedules.length, results });
+  return { checked: schedules.length, results };
+}
+
+export async function GET(req: NextRequest) {
+  // ── Auth (Vercel passes Authorization: Bearer <CRON_SECRET> automatically) ─
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const auth = req.headers.get('authorization');
+    if (auth !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
+  const data = await runCron();
+  return NextResponse.json({ ok: true, ...data });
+}
+
+// Manual trigger — called from the UI dashboard (no auth required, same-origin only)
+export async function POST() {
+  const data = await runCron();
+  return NextResponse.json({ ok: true, ...data });
 }
