@@ -1,4 +1,4 @@
-import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog, OnboardingLog } from './types';
+import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog } from './types';
 import { Flow } from './flow-types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -323,31 +323,3 @@ export async function cancelPendingDownsellsForChat(chatId: number): Promise<voi
   }
 }
 
-// ── Onboarding Logs ───────────────────────────────────────────────────────────
-
-const OB_LOGS_KEY   = 'treactions:onboarding:logs';
-const MAX_OB_LOGS   = 200;
-
-export async function getOnboardingLogs(): Promise<OnboardingLog[]> {
-  try {
-    const raw = await getKV().get<unknown>(OB_LOGS_KEY);
-    return toArray<OnboardingLog>(raw);
-  } catch {
-    return [];
-  }
-}
-
-export async function appendOnboardingLog(log: OnboardingLog): Promise<void> {
-  try {
-    const logs = await getOnboardingLogs();
-    logs.unshift(log);
-    if (logs.length > MAX_OB_LOGS) logs.length = MAX_OB_LOGS;
-    await getKV().set(OB_LOGS_KEY, logs);
-  } catch (err) {
-    console.error('[storage] appendOnboardingLog failed:', err);
-  }
-}
-
-export async function clearOnboardingLogs(): Promise<void> {
-  await getKV().set(OB_LOGS_KEY, []);
-}

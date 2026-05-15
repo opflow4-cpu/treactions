@@ -34,7 +34,6 @@ export async function setWebhook(
 ): Promise<{ ok: boolean; error?: string }> {
   const data = await tgPost(token, 'setWebhook', {
     url: webhookUrl,
-    // 'message' already covers new_chat_members service messages
     allowed_updates: ['message', 'channel_post', 'callback_query'],
   });
   return { ok: data.ok, error: data.description };

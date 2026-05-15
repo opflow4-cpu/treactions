@@ -6,17 +6,15 @@ import ConfigPanel from '@/components/ConfigPanel';
 import LogsPanel from '@/components/LogsPanel';
 import SetupPanel from '@/components/SetupPanel';
 import FlowsPanel from '@/components/FlowsPanel';
-import OnboardingPanel from '@/components/OnboardingPanel';
 
-type Tab = 'bots' | 'flows' | 'onboarding' | 'config' | 'logs' | 'setup';
+type Tab = 'bots' | 'flows' | 'config' | 'logs' | 'setup';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'bots',       label: 'Bots',          icon: '🤖' },
-  { id: 'flows',      label: 'Fluxos',        icon: '🔀' },
-  { id: 'onboarding', label: 'Onboarding',    icon: '👥' },
-  { id: 'config',     label: 'Configurações', icon: '⚙️' },
-  { id: 'logs',       label: 'Logs',          icon: '📋' },
-  { id: 'setup',      label: 'Como usar',     icon: '📖' },
+  { id: 'bots',   label: 'Bots',          icon: '🤖' },
+  { id: 'flows',  label: 'Fluxos',        icon: '🔀' },
+  { id: 'config', label: 'Configurações', icon: '⚙️' },
+  { id: 'logs',   label: 'Logs',          icon: '📋' },
+  { id: 'setup',  label: 'Como usar',     icon: '📖' },
 ];
 
 export default function Home() {
@@ -90,7 +88,7 @@ export default function Home() {
                     {bots.length}
                   </span>
                 )}
-                {t.id === 'onboarding' && (
+                {t.id === 'flows' && (
                   <span className="text-xs bg-emerald-900/70 text-emerald-400 rounded-full px-1.5 py-0.5 leading-none">
                     novo
                   </span>
@@ -108,9 +106,6 @@ export default function Home() {
         )}
         {tab === 'flows' && (
           <FlowsPanel bots={bots} />
-        )}
-        {tab === 'onboarding' && (
-          <OnboardingPanel bots={bots} onBotsRefresh={fetchBots} />
         )}
         {tab === 'config' && (
           <ConfigPanel config={config} onSaved={setConfig} />

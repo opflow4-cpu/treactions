@@ -5,17 +5,10 @@ import { waitUntil } from '@vercel/functions';
 import { getBots } from '@/lib/storage';
 import { dispatchReactions } from '@/lib/reactions';
 import { handleFlowMessage, handleFlowCallback } from '@/lib/flow-executor';
-import { handleNewMember, handleWelcomeStart } from '@/lib/onboarding';
 
-interface TGUser    { id: number; first_name?: string; username?: string; is_bot?: boolean }
+interface TGUser    { id: number; first_name?: string; username?: string }
 interface TGChat    { id: number; title?: string; username?: string; type: string }
-interface TGMessage {
-  message_id: number;
-  chat: TGChat;
-  from?: TGUser;
-  text?: string;
-  new_chat_members?: TGUser[];
-}
+interface TGMessage { message_id: number; chat: TGChat; from?: TGUser; text?: string }
 interface TGCallback {
   id: string;
   from: TGUser;
@@ -57,48 +50,17 @@ export async function POST(
 
   // ── Regular message / channel post ───────────────────────────────────────
   const msg = update.message ?? update.channel_post;
-  if (!msg) return NextResponse.json({ ok: true });
+  if (!msg || !bot.active) return NextResponse.json({ ok: true });
 
-  const chatId    = msg.chat.id;
+  const chatId   = msg.chat.id;
+  const msgId    = msg.message_id;
   const chatTitle = msg.chat.title ?? msg.chat.username ?? String(chatId);
-  const text      = msg.text ?? '';
+  const text     = msg.text ?? '';
 
-  // ── New member(s) joined the group ───────────────────────────────────────
-  if (msg.new_chat_members && msg.new_chat_members.length > 0) {
-    if (bot.active) {
-      for (const member of msg.new_chat_members) {
-        if (member.is_bot) continue; // ignore bots joining
-        const userName = member.username ?? member.first_name;
-        waitUntil(
-          handleNewMember(token, bot, member.id, userName, chatId, chatTitle)
-            .catch((e) => console.error('[webhook] onboarding new-member error:', e)),
-        );
-      }
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  if (!bot.active) return NextResponse.json({ ok: true });
-
-  // ── /start welcome_USERID_GROUPID deep-link ───────────────────────────────
-  if (text.startsWith('/start welcome_') && msg.from) {
-    const payload  = text.slice('/start '.length); // "welcome_USERID_GROUPID"
-    const fromName = msg.from.username ?? msg.from.first_name;
-    waitUntil(
-      handleWelcomeStart(token, bot, msg.from.id, fromName, payload)
-        .catch((e) => console.error('[webhook] welcome-start error:', e)),
-    );
-    return NextResponse.json({ ok: true });
-  }
-
-  // ── Normal message — reactions + flow triggers ────────────────────────────
-  const msgId = msg.message_id;
   waitUntil(
     Promise.all([
       dispatchReactions(chatId, msgId, chatTitle),
-      text
-        ? handleFlowMessage(token, chatId, text).catch((e) => console.error('[webhook] flow error:', e))
-        : Promise.resolve(),
+      text ? handleFlowMessage(token, chatId, text).catch((e) => console.error('[webhook] flow error:', e)) : Promise.resolve(),
     ]),
   );
 
