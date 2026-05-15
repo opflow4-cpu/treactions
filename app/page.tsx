@@ -75,83 +75,30 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Tab bar */}
-      <div style={{ borderBottom: '1px solid #1f2937', background: 'rgba(17,24,39,0.3)', position: 'relative' }}>
-        {/* full-width scroll container — no max-width wrapper */}
-        <div
-          style={{
-            display: 'flex',
-            overflowX: 'auto',
-            overflowY: 'visible',
-            /* hide scrollbar cross-browser without any plugin */
-            scrollbarWidth: 'none',       /* Firefox */
-            msOverflowStyle: 'none',      /* IE/Edge */
-            paddingLeft: 16,
-            paddingRight: 16,
-          }}
-          /* WebKit scrollbar — must be a style tag, not inline prop */
-        >
-          <style>{`.treactions-nav::-webkit-scrollbar{display:none}`}</style>
-          <nav
-            className="treactions-nav"
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'nowrap',          /* single row, never wraps */
-              alignItems: 'stretch',
-              gap: 2,
-              minWidth: 'max-content',     /* expands to fit all tabs */
-              width: '100%',
-            }}
-          >
-            {TABS.map((t) => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '12px 14px',
-                    fontSize: 14,
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                    flexGrow: 0,
-                    border: 'none',
-                    borderBottom: active ? '2px solid #10b981' : '2px solid transparent',
-                    background: 'transparent',
-                    color: active ? '#34d399' : '#6b7280',
-                    cursor: 'pointer',
-                    transition: 'color 0.15s, border-color 0.15s',
-                    outline: 'none',
-                  }}
-                >
-                  <span>{t.icon}</span>
-                  <span>{t.label}</span>
-                  {t.id === 'bots' && bots.length > 0 && (
-                    <span style={{
-                      fontSize: 11, background: '#374151', color: '#d1d5db',
-                      borderRadius: 99, padding: '1px 6px', lineHeight: 1.4,
-                    }}>
-                      {bots.length}
-                    </span>
-                  )}
-                  {t.id === 'schedules' && (
-                    <span style={{
-                      fontSize: 10, background: 'rgba(99,102,241,0.2)', color: '#818cf8',
-                      borderRadius: 99, padding: '1px 6px', lineHeight: 1.4,
-                      border: '1px solid rgba(99,102,241,0.35)',
-                    }}>
-                      novo
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+      {/* Tab bar — zero legacy CSS, plain flex */}
+      <div style={{ borderBottom: '1px solid #1f2937', background: '#111827' }}>
+        <div style={{ display: 'flex', overflowX: 'auto', gap: 4, padding: '0 16px' }}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={{
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+                padding: '12px 14px',
+                fontSize: 14,
+                fontWeight: 500,
+                background: 'transparent',
+                border: 'none',
+                borderBottom: tab === t.id ? '2px solid #10b981' : '2px solid transparent',
+                color: tab === t.id ? '#34d399' : '#6b7280',
+                cursor: 'pointer',
+              }}
+            >
+              {t.icon} {t.label}
+              {t.id === 'bots' && bots.length > 0 && ` (${bots.length})`}
+            </button>
+          ))}
         </div>
       </div>
 
