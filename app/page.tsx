@@ -75,6 +75,11 @@ export default function Home() {
         </div>
       </header>
 
+      {/* ████ DEBUG NAVBAR NOVA ████ */}
+      <div style={{ background: '#7c3aed', color: '#fff', textAlign: 'center', padding: '10px', fontSize: 18, fontWeight: 900, letterSpacing: 2 }}>
+        ✅ DEBUG NAVBAR NOVA — commit ea58e03+
+      </div>
+
       {/* Tab bar — zero legacy CSS, plain flex */}
       <div style={{ borderBottom: '1px solid #1f2937', background: '#111827' }}>
         <div style={{ display: 'flex', overflowX: 'auto', gap: 4, padding: '0 16px' }}>

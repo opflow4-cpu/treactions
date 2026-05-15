@@ -5,7 +5,10 @@
       "Bash(Select-Object -Property FullName, PSIsContainer)",
       "Bash(Sort-Object FullName)",
       "Bash(find \"C:/Users/Alex\" -maxdepth 2 -name \"TReactions*\" -o -name \"*telegram*\" -o -name \"*reactions*\" 2>/dev/null | head -20)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
