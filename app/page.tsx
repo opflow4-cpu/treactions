@@ -72,12 +72,21 @@ export default function Home() {
       {/* Tab bar */}
       <div className="border-b border-gray-800 bg-gray-900/30">
         <div className="max-w-5xl mx-auto px-4">
-          <nav className="flex gap-1 overflow-x-auto scrollbar-none">
+          <nav
+            style={{
+              display: 'flex',
+              gap: 4,
+              overflowX: 'auto',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+            }}
+          >
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
                   tab === t.id
                     ? 'border-emerald-500 text-emerald-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
