@@ -394,33 +394,79 @@ function TypingEditor({ block, onChange }: { block: TypingBlock; onChange: (b: T
       </div>
       <div className="flex items-center gap-3">
         <label className="text-xs text-gray-400 shrink-0">Personalizado:</label>
-        <input type="number" min={1} max={25} value={block.seconds}
-          onChange={(e) => onChange({ ...block, seconds: Math.max(1, Math.min(25, Number(e.target.value))) })}
+        <input type="number" min={1} value={block.seconds}
+          onChange={(e) => onChange({ ...block, seconds: Math.max(1, Number(e.target.value)) })}
           className="w-20 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-cyan-500/60" />
-        <span className="text-xs text-gray-600">segundos (máx 25s)</span>
+        <span className="text-xs text-gray-600">segundos</span>
       </div>
     </div>
   );
 }
 
-const DELAY_PRESETS = [3, 5, 10, 15, 30, 60];
+// Presets: [value, unit, label]
+const DELAY_PRESETS: [number, DelayBlock['delayUnit'], string][] = [
+  [5,  'seconds', '5s'],
+  [15, 'seconds', '15s'],
+  [30, 'seconds', '30s'],
+  [1,  'minutes', '1min'],
+  [5,  'minutes', '5min'],
+  [30, 'minutes', '30min'],
+  [1,  'hours',   '1h'],
+  [2,  'hours',   '2h'],
+  [24, 'hours',   '24h'],
+];
+
 function DelayEditor({ block, onChange }: { block: DelayBlock; onChange: (b: DelayBlock) => void }) {
+  const unit  = block.delayUnit  ?? 'seconds';
+  const value = block.delayValue ?? block.seconds ?? 5;
+
+  const UNIT_LABELS: Record<DelayBlock['delayUnit'], string> = {
+    seconds: 'Segundos',
+    minutes: 'Minutos',
+    hours:   'Horas',
+  };
+
+  const isPresetActive = (pv: number, pu: DelayBlock['delayUnit']) =>
+    value === pv && unit === pu;
+
   return (
-    <div className="space-y-3">
-      <div className="flex gap-2 flex-wrap">
-        {DELAY_PRESETS.map((s) => (
-          <button key={s} type="button" onClick={() => onChange({ ...block, seconds: s })}
-            className={`px-3 py-1 text-xs rounded-full border transition-colors ${block.seconds === s ? 'bg-gray-700 border-gray-500 text-white' : 'border-gray-700 text-gray-500 hover:border-gray-500'}`}>
-            {s >= 60 ? `${s / 60}min` : `${s}s`}
-          </button>
-        ))}
+    <div className="space-y-4">
+      {/* Presets */}
+      <div>
+        <p className="text-xs text-gray-500 mb-2">Presets rápidos</p>
+        <div className="flex gap-1.5 flex-wrap">
+          {DELAY_PRESETS.map(([pv, pu, label]) => (
+            <button key={label} type="button"
+              onClick={() => onChange({ ...block, delayValue: pv, delayUnit: pu })}
+              className="px-3 py-1 text-xs rounded-full border transition-colors"
+              style={isPresetActive(pv, pu)
+                ? { background: 'rgba(100,116,139,0.18)', borderColor: 'rgba(100,116,139,0.7)', color: '#e2e8f0' }
+                : { borderColor: 'rgba(75,85,99,0.4)', color: '#6b7280' }}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-gray-400 shrink-0">Personalizado:</label>
-        <input type="number" min={1} max={300} value={block.seconds}
-          onChange={(e) => onChange({ ...block, seconds: Math.max(1, Number(e.target.value)) })}
-          className="w-20 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none" />
-        <span className="text-xs text-gray-600">segundos (máx 25s ao vivo)</span>
+
+      {/* Custom value + unit */}
+      <div>
+        <p className="text-xs text-gray-500 mb-2">Personalizado</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number" min={1}
+            value={value}
+            onChange={(e) => onChange({ ...block, delayValue: Math.max(1, Number(e.target.value)), delayUnit: unit })}
+            className="w-24 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-gray-500"
+          />
+          <select
+            value={unit}
+            onChange={(e) => onChange({ ...block, delayValue: value, delayUnit: e.target.value as DelayBlock['delayUnit'] })}
+            className="flex-1 bg-[#0d1117] border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-gray-500 cursor-pointer">
+            {(Object.keys(UNIT_LABELS) as DelayBlock['delayUnit'][]).map((u) => (
+              <option key={u} value={u}>{UNIT_LABELS[u]}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

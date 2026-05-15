@@ -53,7 +53,7 @@ async function execBlock(token: string, chatId: number, block: FlowBlock, flow: 
 
     case 'typing': {
       // Telegram's typing indicator disappears after ~5s, so refresh every 4s for longer durations
-      const totalMs = Math.min(block.seconds * 1000, 25_000);
+      const totalMs = block.seconds * 1000;
       const REFRESH = 4_000;
       let remaining = totalMs;
       while (remaining > 0) {
@@ -133,7 +133,7 @@ export async function executeDownsell(pdl: PendingDownsell): Promise<void> {
 
   // Optional typing simulation
   if (block.typingSeconds > 0) {
-    const totalMs = Math.min(block.typingSeconds * 1_000, 10_000);
+    const totalMs = block.typingSeconds * 1_000;
     let rem = totalMs;
     while (rem > 0) {
       await sendChatAction(botToken, chatId, 'typing');
