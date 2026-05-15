@@ -1,37 +1,46 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { Bot, GlobalConfig, DEFAULT_CONFIG } from '@/lib/types';
-import BotsPanel from '@/components/BotsPanel';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Bot, GitBranch, SlidersHorizontal, Activity, BookOpen } from 'lucide-react';
+import { Bot as BotType, GlobalConfig, DEFAULT_CONFIG } from '@/lib/types';
+import Sidebar, { Tab } from '@/components/Sidebar';
+import BotsPanel   from '@/components/BotsPanel';
 import ConfigPanel from '@/components/ConfigPanel';
-import LogsPanel from '@/components/LogsPanel';
-import SetupPanel from '@/components/SetupPanel';
-import FlowsPanel from '@/components/FlowsPanel';
+import LogsPanel   from '@/components/LogsPanel';
+import SetupPanel  from '@/components/SetupPanel';
+import FlowsPanel  from '@/components/FlowsPanel';
 
-type Tab = 'bots' | 'flows' | 'config' | 'logs' | 'setup';
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'bots',   label: 'Bots',          icon: '🤖' },
-  { id: 'flows',  label: 'Fluxos',        icon: '🔀' },
-  { id: 'config', label: 'Configurações', icon: '⚙️' },
-  { id: 'logs',   label: 'Logs',          icon: '📋' },
-  { id: 'setup',  label: 'Como usar',     icon: '📖' },
-];
+// ── Page meta ─────────────────────────────────────────────────────────────────
+const PAGE_META: Record<Tab, { label: string; sub: string; icon: React.ReactNode }> = {
+  bots:   { label: 'Bots',          sub: 'Gerencie seus bots do Telegram',        icon: <Bot size={16} /> },
+  flows:  { label: 'Fluxos',        sub: 'Sequências automatizadas de mensagens', icon: <GitBranch size={16} /> },
+  config: { label: 'Configurações', sub: 'Parâmetros globais do sistema',         icon: <SlidersHorizontal size={16} /> },
+  logs:   { label: 'Logs',          sub: 'Histórico de atividade em tempo real',  icon: <Activity size={16} /> },
+  setup:  { label: 'Como usar',     sub: 'Documentação e guia de início',         icon: <BookOpen size={16} /> },
+};
 
 async function logout() {
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/login';
 }
 
+// ── Page transitions ──────────────────────────────────────────────────────────
+const pageVariants = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0  },
+  exit:    { opacity: 0, y: -6 },
+};
+
 export default function Home() {
-  const [tab, setTab] = useState<Tab>('bots');
-  const [bots, setBots] = useState<Bot[]>([]);
-  const [config, setConfig] = useState<GlobalConfig>(DEFAULT_CONFIG);
-  const [loadingBots, setLoadingBots] = useState(true);
+  const [tab, setTab]             = useState<Tab>('bots');
+  const [bots, setBots]           = useState<BotType[]>([]);
+  const [config, setConfig]       = useState<GlobalConfig>(DEFAULT_CONFIG);
+  const [loadingBots, setLoading] = useState(true);
 
   const fetchBots = useCallback(async () => {
     const res = await fetch('/api/bots');
     if (res.ok) setBots(await res.json());
-    setLoadingBots(false);
+    setLoading(false);
   }, []);
 
   const fetchConfig = useCallback(async () => {
@@ -39,113 +48,155 @@ export default function Home() {
     if (res.ok) setConfig(await res.json());
   }, []);
 
-  useEffect(() => {
-    fetchBots();
-    fetchConfig();
-  }, [fetchBots, fetchConfig]);
+  useEffect(() => { fetchBots(); fetchConfig(); }, [fetchBots, fetchConfig]);
 
   const activeBots = bots.filter((b) => b.active).length;
+  const meta = PAGE_META[tab];
+
+  // Current UTC time for the HUD clock
+  const [clock, setClock] = useState('');
+  useEffect(() => {
+    const tick = () =>
+      setClock(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚡</span>
-            <span className="font-bold text-white text-lg tracking-tight">TReactions</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-400">
-            <div className="flex items-center gap-2">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  activeBots > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'
-                }`}
-              />
-              <span>
-                {loadingBots
-                  ? '…'
-                  : activeBots > 0
-                  ? `${activeBots} bot${activeBots !== 1 ? 's' : ''} ativo${activeBots !== 1 ? 's' : ''}`
-                  : 'Nenhum bot ativo'}
-              </span>
-            </div>
-            <button
-              onClick={logout}
-              style={{
-                padding: '4px 12px',
-                fontSize: 12,
-                fontWeight: 500,
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: 'transparent',
-                color: '#6b7280',
-                cursor: 'pointer',
-              }}
-              onMouseEnter={(e) => {
-                (e.target as HTMLButtonElement).style.color = '#f87171';
-                (e.target as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)';
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLButtonElement).style.color = '#6b7280';
-                (e.target as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.1)';
-              }}
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </header>
+    <div style={{ display: 'flex', minHeight: '100vh', position: 'relative' }}>
 
-      {/* Tab bar */}
-      <div style={{ borderBottom: '1px solid #1f2937', background: '#111827' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', padding: '0 8px' }}>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                padding: '11px 14px',
-                fontSize: 14,
-                fontWeight: 500,
-                background: 'transparent',
-                border: 'none',
-                borderBottom: tab === t.id ? '2px solid #10b981' : '2px solid transparent',
-                color: tab === t.id ? '#34d399' : '#6b7280',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {t.icon} {t.label}
-              {t.id === 'bots' && bots.length > 0 && ` (${bots.length})`}
-            </button>
-          ))}
-        </div>
+      {/* ── Ambient glow blobs ──────────────────────────────────────────── */}
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+        pointerEvents: 'none', zIndex: 0,
+      }}>
+        <div style={{
+          position: 'absolute', top: '-10%', right: '10%',
+          width: 500, height: 500, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(0,100,255,0.04) 0%, transparent 65%)',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '-10%', left: '5%',
+          width: 400, height: 400, borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(120,0,200,0.04) 0%, transparent 65%)',
+        }} />
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-        {tab === 'bots' && (
-          <BotsPanel bots={bots} onRefresh={fetchBots} />
-        )}
-        {tab === 'flows' && (
-          <FlowsPanel bots={bots} />
-        )}
-        {tab === 'config' && (
-          <ConfigPanel config={config} onSaved={setConfig} />
-        )}
-        {tab === 'logs' && (
-          <LogsPanel />
-        )}
-        {tab === 'setup' && (
-          <SetupPanel bots={bots} />
-        )}
-      </main>
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      <div style={{ position: 'relative', zIndex: 10 }}>
+        <Sidebar
+          tab={tab}
+          setTab={setTab}
+          activeBots={activeBots}
+          totalBots={bots.length}
+          onLogout={logout}
+        />
+      </div>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 text-center text-xs text-gray-600 py-4">
-        TReactions — Bots oficiais do Telegram via BotFather · Webhook · Sem contas pessoais
-      </footer>
+      {/* ── Main ────────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative', zIndex: 1 }}>
+
+        {/* Topbar */}
+        <header style={{
+          height: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 28px',
+          background: 'rgba(2,6,18,0.85)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(0,212,255,0.07)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          flexShrink: 0,
+        }}>
+          {/* Left: breadcrumb */}
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+          >
+            <span style={{ color: 'rgba(0,212,255,0.45)', display: 'flex' }}>{meta.icon}</span>
+            <div>
+              <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 14, lineHeight: 1.2 }}>
+                {meta.label}
+              </div>
+              <div style={{ color: '#334155', fontSize: 11 }}>{meta.sub}</div>
+            </div>
+          </motion.div>
+
+          {/* Right: status + clock */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {/* System status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {loadingBots ? (
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1e293b', display: 'inline-block' }} />
+              ) : activeBots > 0 ? (
+                <span className="status-online" />
+              ) : (
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#374151', display: 'inline-block' }} />
+              )}
+              <span style={{ fontSize: 12, color: activeBots > 0 ? 'rgba(0,212,255,0.7)' : '#374151', fontWeight: 500 }}>
+                {loadingBots ? 'Conectando…' : activeBots > 0 ? `${activeBots} ativo${activeBots !== 1 ? 's' : ''}` : 'Nenhum ativo'}
+              </span>
+            </div>
+
+            {/* Clock */}
+            {clock && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#1e3a5f', letterSpacing: '0.08em' }}>
+                {clock}
+              </div>
+            )}
+
+            {/* Separator */}
+            <div style={{ width: 1, height: 20, background: 'rgba(0,212,255,0.08)' }} />
+
+            {/* System label */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#00d4ff', boxShadow: '0 0 6px #00d4ff' }} />
+              <span style={{ fontSize: 10, color: 'rgba(0,212,255,0.4)', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>
+                Sistema Online
+              </span>
+            </div>
+          </div>
+        </header>
+
+        {/* Panel content */}
+        <main style={{ flex: 1, padding: '28px', overflowY: 'auto' }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0,  transition: { duration: 0.28 } }}
+              exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
+            >
+              {tab === 'bots'   && <BotsPanel   bots={bots} onRefresh={fetchBots} />}
+              {tab === 'flows'  && <FlowsPanel  bots={bots} />}
+              {tab === 'config' && <ConfigPanel config={config} onSaved={setConfig} />}
+              {tab === 'logs'   && <LogsPanel />}
+              {tab === 'setup'  && <SetupPanel  bots={bots} />}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+
+        {/* Footer */}
+        <footer style={{
+          padding: '10px 28px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          borderTop: '1px solid rgba(0,212,255,0.05)',
+        }}>
+          <span style={{ fontSize: 10, color: '#0f2440', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+            TREACTIONS v2 · TELEGRAM AUTOMATION SYSTEM
+          </span>
+          <span style={{ fontSize: 10, color: '#0f2440', fontFamily: 'var(--font-mono)' }}>
+            WEBHOOK · NO-CODE · SERVERLESS
+          </span>
+        </footer>
+      </div>
     </div>
   );
 }

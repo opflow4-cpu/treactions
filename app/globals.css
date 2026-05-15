@@ -2,58 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  color-scheme: dark;
-}
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+html { color-scheme: dark; }
 
 body {
-  background-color: #0f1117;
+  background-color: #020710;
+  color: #e2e8f0;
+  font-feature-settings: 'cv02','cv03','cv04','cv11';
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+/* ── Scrollbar neon ───────────────────────────────────────────────────────── */
+::-webkit-scrollbar            { width: 4px; height: 4px; }
+::-webkit-scrollbar-track      { background: transparent; }
+::-webkit-scrollbar-thumb      { background: rgba(0,212,255,0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover{ background: rgba(0,212,255,0.45); }
+* { scrollbar-width: thin; scrollbar-color: rgba(0,212,255,0.2) transparent; }
 
-/* ── React Flow premium overrides ─────────────────────── */
-.react-flow { background: #070a12; }
+/* ── Selection ────────────────────────────────────────────────────────────── */
+::selection { background: rgba(0,212,255,0.18); color: #fff; }
 
-/* Remove default white node background */
+/* ── HUD background ───────────────────────────────────────────────────────── */
+.hud-bg {
+  background-color: #020710;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── Glassmorphism card ───────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(5, 14, 32, 0.72);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(0, 212, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+  border-radius: 16px;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.glass-card:hover {
+  border-color: rgba(0, 212, 255, 0.28);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(0,212,255,0.08), inset 0 1px 0 rgba(0,212,255,0.06);
+}
+
+/* ── Neon button ──────────────────────────────────────────────────────────── */
+.btn-cyan {
+  background: rgba(0,212,255,0.08);
+  border: 1px solid rgba(0,212,255,0.35);
+  color: #00d4ff;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.btn-cyan:hover {
+  background: rgba(0,212,255,0.15);
+  border-color: rgba(0,212,255,0.6);
+  box-shadow: 0 0 20px rgba(0,212,255,0.25);
+}
+.btn-cyan:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Input neon ───────────────────────────────────────────────────────────── */
+.input-hud {
+  background: rgba(2, 8, 20, 0.85);
+  border: 1px solid rgba(0,212,255,0.12);
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-hud::placeholder { color: #334155; }
+.input-hud:focus {
+  border-color: rgba(0,212,255,0.45);
+  box-shadow: 0 0 0 3px rgba(0,212,255,0.06), 0 0 20px rgba(0,212,255,0.1);
+}
+
+/* ── Status dot ───────────────────────────────────────────────────────────── */
+.status-online {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #00d4ff;
+  box-shadow: 0 0 8px rgba(0,212,255,0.9);
+  animation: glow-pulse 2.5s ease-in-out infinite;
+}
+.status-offline {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #1e293b;
+}
+
+/* ── Animations ───────────────────────────────────────────────────────────── */
+@keyframes glow-pulse {
+  0%,100% { opacity: 0.5; }
+  50%     { opacity: 1;   }
+}
+@keyframes scan-line {
+  0%   { transform: translateY(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+/* ── React Flow premium overrides ────────────────────────────────────────── */
+.react-flow { background: #030810; }
 .react-flow__node { background: transparent !important; border: none !important; padding: 0 !important; }
-
-/* Controls */
 .react-flow__controls-button {
-  background: rgba(10,12,22,0.92) !important;
-  border-color: rgba(255,255,255,0.07) !important;
-  color: #6b7280 !important; fill: #6b7280 !important;
+  background: rgba(5,12,28,0.95) !important;
+  border-color: rgba(0,212,255,0.12) !important;
+  color: #475569 !important;
+  fill: #475569 !important;
 }
-.react-flow__controls-button:hover { background: rgba(22,26,44,0.95) !important; color: #d1d5db !important; fill: #d1d5db !important; }
+.react-flow__controls-button:hover {
+  background: rgba(0,212,255,0.08) !important;
+  color: #00d4ff !important;
+  fill: #00d4ff !important;
+}
 .react-flow__controls-button:last-child { border-bottom: none !important; }
-
-/* Animated dashed edges */
-.flow-edge-animated {
-  stroke-dasharray: 7 4;
-  animation: flowEdgeDash 1.4s linear infinite;
-}
+.flow-edge-animated { stroke-dasharray: 7 4; animation: flowEdgeDash 1.4s linear infinite; }
 @keyframes flowEdgeDash { to { stroke-dashoffset: -22; } }
-
-/* Selection box */
 .react-flow__selection {
-  background: rgba(99,102,241,0.05) !important;
-  border: 1px solid rgba(99,102,241,0.35) !important;
+  background: rgba(0,212,255,0.04) !important;
+  border: 1px solid rgba(0,212,255,0.3) !important;
 }
-
-/* Connection line while dragging */
 .react-flow__connection-path {
-  stroke: #6366f1 !important;
+  stroke: #00d4ff !important;
   stroke-width: 2 !important;
   stroke-dasharray: 5 4 !important;
-  stroke-opacity: 0.7 !important;
+  stroke-opacity: 0.6 !important;
 }
-
-/* Handle hover */
 .react-flow__handle:hover { opacity: 1 !important; }
-
-/* MiniMap */
-.react-flow__minimap-mask { fill: rgba(5,7,14,0.8); }
+.react-flow__minimap-mask { fill: rgba(2,7,16,0.85); }
