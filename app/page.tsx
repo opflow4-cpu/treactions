@@ -72,12 +72,12 @@ export default function Home() {
       {/* Tab bar */}
       <div className="border-b border-gray-800 bg-gray-900/30">
         <div className="max-w-5xl mx-auto px-4">
-          <nav className="flex gap-1">
+          <nav className="flex gap-1 overflow-x-auto scrollbar-none">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
                   tab === t.id
                     ? 'border-emerald-500 text-emerald-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300'
@@ -90,8 +90,8 @@ export default function Home() {
                     {bots.length}
                   </span>
                 )}
-                {t.id === 'flows' && (
-                  <span className="text-xs bg-emerald-900/70 text-emerald-400 rounded-full px-1.5 py-0.5 leading-none">
+                {t.id === 'schedules' && (
+                  <span className="text-xs bg-indigo-900/70 text-indigo-400 rounded-full px-1.5 py-0.5 leading-none hidden sm:inline">
                     novo
                   </span>
                 )}
