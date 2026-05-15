@@ -1,4 +1,4 @@
-import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog } from './types';
+import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog, ScheduledMessage, ScheduleLog } from './types';
 import { Flow } from './flow-types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -321,5 +321,52 @@ export async function cancelPendingDownsellsForChat(chatId: number): Promise<voi
   if (filtered.length !== queue.length) {
     await savePendingDownsellQueue(filtered);
   }
+}
+
+// ── Scheduled Messages ────────────────────────────────────────────────────────
+
+const SCHEDULES_KEY = 'treactions:schedules';
+
+export async function getSchedules(): Promise<ScheduledMessage[]> {
+  try {
+    const raw = await getKV().get<unknown>(SCHEDULES_KEY);
+    return toArray<ScheduledMessage>(raw);
+  } catch (err) {
+    console.error('[storage] getSchedules FAILED:', err);
+    return [];
+  }
+}
+
+export async function saveSchedules(schedules: ScheduledMessage[]): Promise<void> {
+  await getKV().set(SCHEDULES_KEY, schedules);
+}
+
+// ── Schedule Logs ─────────────────────────────────────────────────────────────
+
+const SCHED_LOGS_KEY = 'treactions:schedule:logs';
+const MAX_SCHED_LOGS = 300;
+
+export async function getScheduleLogs(): Promise<ScheduleLog[]> {
+  try {
+    const raw = await getKV().get<unknown>(SCHED_LOGS_KEY);
+    return toArray<ScheduleLog>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function appendScheduleLog(log: ScheduleLog): Promise<void> {
+  try {
+    const logs = await getScheduleLogs();
+    logs.unshift(log);
+    if (logs.length > MAX_SCHED_LOGS) logs.length = MAX_SCHED_LOGS;
+    await getKV().set(SCHED_LOGS_KEY, logs);
+  } catch (err) {
+    console.error('[storage] appendScheduleLog failed:', err);
+  }
+}
+
+export async function clearScheduleLogs(): Promise<void> {
+  await getKV().set(SCHED_LOGS_KEY, []);
 }
 

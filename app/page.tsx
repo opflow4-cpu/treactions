@@ -6,15 +6,17 @@ import ConfigPanel from '@/components/ConfigPanel';
 import LogsPanel from '@/components/LogsPanel';
 import SetupPanel from '@/components/SetupPanel';
 import FlowsPanel from '@/components/FlowsPanel';
+import SchedulesPanel from '@/components/SchedulesPanel';
 
-type Tab = 'bots' | 'flows' | 'config' | 'logs' | 'setup';
+type Tab = 'bots' | 'flows' | 'schedules' | 'config' | 'logs' | 'setup';
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'bots',   label: 'Bots',          icon: '🤖' },
-  { id: 'flows',  label: 'Fluxos',        icon: '🔀' },
-  { id: 'config', label: 'Configurações', icon: '⚙️' },
-  { id: 'logs',   label: 'Logs',          icon: '📋' },
-  { id: 'setup',  label: 'Como usar',     icon: '📖' },
+  { id: 'bots',      label: 'Bots',          icon: '🤖' },
+  { id: 'flows',     label: 'Fluxos',        icon: '🔀' },
+  { id: 'schedules', label: 'Agendamentos',  icon: '📅' },
+  { id: 'config',    label: 'Configurações', icon: '⚙️' },
+  { id: 'logs',      label: 'Logs',          icon: '📋' },
+  { id: 'setup',     label: 'Como usar',     icon: '📖' },
 ];
 
 export default function Home() {
@@ -106,6 +108,9 @@ export default function Home() {
         )}
         {tab === 'flows' && (
           <FlowsPanel bots={bots} />
+        )}
+        {tab === 'schedules' && (
+          <SchedulesPanel bots={bots} />
         )}
         {tab === 'config' && (
           <ConfigPanel config={config} onSaved={setConfig} />
