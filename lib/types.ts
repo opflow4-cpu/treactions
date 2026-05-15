@@ -24,39 +24,6 @@ export const DEFAULT_CONFIG: GlobalConfig = {
   useRandomEmoji: true,
 };
 
-// ── Scheduled Messages ────────────────────────────────────────────────────────
-
-export interface ScheduledMessage {
-  id: string;
-  name: string;
-  botId: string;
-  chatId: string;          // Telegram chat ID or @username
-  message: string;
-  mediaUrl?: string;
-  mediaType?: 'image' | 'video' | 'audio' | 'file';
-  caption?: string;
-  time: string;            // "HH:MM" 24 h in timezone
-  days: number[];          // 0 = Sun … 6 = Sat
-  timezone: string;        // e.g. "America/Sao_Paulo"
-  active: boolean;
-  lastFiredAt?: number;    // unix ms — used for dedup
-  createdAt: number;
-  updatedAt: number;
-}
-
-export type ScheduleLogEvent = 'sent' | 'error' | 'skipped';
-
-export interface ScheduleLog {
-  id: string;
-  timestamp: number;
-  scheduleId: string;
-  scheduleName: string;
-  botId: string;
-  chatId: string;
-  event: ScheduleLogEvent;
-  error?: string;
-}
-
 // ── Reaction Logs ─────────────────────────────────────────────────────────────
 
 export interface ReactionLog {
