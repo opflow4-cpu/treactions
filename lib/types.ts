@@ -20,7 +20,8 @@ export const DEFAULT_CONFIG: GlobalConfig = {
   maxBotsPerMessage: 3,
   delayMin: 1000,
   delayMax: 5000,
-  emojiPool: ['👍', '❤️', '🔥', '🥰', '👏', '😍', '🤩', '💯', '🎉', '✨'],
+  // ✨ removido — causa REACTION_INVALID no Telegram
+  emojiPool: ['👍', '❤️', '🔥', '👏', '😍', '🎉', '🤩', '💯'],
   useRandomEmoji: true,
 };
 
