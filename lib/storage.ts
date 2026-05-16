@@ -1,4 +1,4 @@
-import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog, BotChat, ChatKind } from './types';
+import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog, BotChat, ChatKind, MemberEvent } from './types';
 import { Flow } from './flow-types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -380,4 +380,31 @@ export async function getAllChats(botIds: string[]): Promise<Record<string, BotC
     botIds.map(async (id) => [id, await getChats(id)] as const),
   );
   return Object.fromEntries(entries);
+}
+
+// ── Member Events ─────────────────────────────────────────────────────────────
+// Armazena eventos de entrada/saída de membros detectados via webhook.
+
+const MEMBERS_KEY  = 'treactions:members:events';
+const MAX_MEMBER_EVENTS = 1000;
+
+export async function getMemberEvents(): Promise<MemberEvent[]> {
+  try {
+    const raw = await getKV().get<unknown>(MEMBERS_KEY);
+    return toArray<MemberEvent>(raw);
+  } catch (err) {
+    console.error('[storage] getMemberEvents FAILED (returning []):', err);
+    return [];
+  }
+}
+
+export async function appendMemberEvent(event: MemberEvent): Promise<void> {
+  const events = await getMemberEvents();
+  events.unshift(event);
+  if (events.length > MAX_MEMBER_EVENTS) events.length = MAX_MEMBER_EVENTS;
+  await getKV().set(MEMBERS_KEY, events);
+}
+
+export async function clearMemberEvents(): Promise<void> {
+  await getKV().set(MEMBERS_KEY, []);
 }

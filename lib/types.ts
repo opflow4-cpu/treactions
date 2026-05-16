@@ -42,6 +42,24 @@ export interface BotChat {
   error?:        string;   // "Bot sem acesso ao chat ou chat inválido" etc
 }
 
+// ── Member Events ─────────────────────────────────────────────────────────────
+
+export type MemberEventType = 'joined' | 'left';
+
+export interface MemberEvent {
+  id: string;
+  timestamp: number;
+  chatId: number | string;
+  chatTitle: string;
+  userId: number;
+  firstName: string;
+  lastName?: string;
+  username?: string;
+  event: MemberEventType;
+  botId: string;
+  botName: string;
+}
+
 // ── Reaction Logs ─────────────────────────────────────────────────────────────
 
 export interface ReactionLog {
