@@ -2,19 +2,20 @@
 import { motion, type Variants } from 'framer-motion';
 import {
   Bot, GitBranch, SlidersHorizontal,
-  Activity, BookOpen, Zap, LogOut, Circle,
+  Activity, BookOpen, Zap, LogOut, Circle, MessagesSquare,
 } from 'lucide-react';
 
-export type Tab = 'bots' | 'flows' | 'config' | 'logs' | 'setup';
+export type Tab = 'bots' | 'chats' | 'flows' | 'config' | 'logs' | 'setup';
 
 interface NavItem { id: Tab; label: string; icon: React.ReactNode; }
 
 const NAV: NavItem[] = [
-  { id: 'bots',   label: 'Bots',          icon: <Bot size={17} /> },
-  { id: 'flows',  label: 'Fluxos',        icon: <GitBranch size={17} /> },
+  { id: 'bots',   label: 'Bots',          icon: <Bot             size={17} /> },
+  { id: 'chats',  label: 'Chats',         icon: <MessagesSquare  size={17} /> },
+  { id: 'flows',  label: 'Fluxos',        icon: <GitBranch       size={17} /> },
   { id: 'config', label: 'Configurações', icon: <SlidersHorizontal size={17} /> },
-  { id: 'logs',   label: 'Logs',          icon: <Activity size={17} /> },
-  { id: 'setup',  label: 'Como usar',     icon: <BookOpen size={17} /> },
+  { id: 'logs',   label: 'Logs',          icon: <Activity        size={17} /> },
+  { id: 'setup',  label: 'Como usar',     icon: <BookOpen        size={17} /> },
 ];
 
 interface Props {

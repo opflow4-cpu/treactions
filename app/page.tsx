@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, GitBranch, SlidersHorizontal, Activity, BookOpen } from 'lucide-react';
+import { Bot, GitBranch, SlidersHorizontal, Activity, BookOpen, MessagesSquare } from 'lucide-react';
 import { Bot as BotType, GlobalConfig, DEFAULT_CONFIG } from '@/lib/types';
 import Sidebar, { Tab } from '@/components/Sidebar';
 import BotsPanel   from '@/components/BotsPanel';
+import ChatsPanel  from '@/components/ChatsPanel';
 import ConfigPanel from '@/components/ConfigPanel';
 import LogsPanel   from '@/components/LogsPanel';
 import SetupPanel  from '@/components/SetupPanel';
@@ -12,11 +13,12 @@ import FlowsPanel  from '@/components/FlowsPanel';
 
 // ── Page meta ─────────────────────────────────────────────────────────────────
 const PAGE_META: Record<Tab, { label: string; sub: string; icon: React.ReactNode }> = {
-  bots:   { label: 'Bots',          sub: 'Gerencie seus bots do Telegram',        icon: <Bot size={16} /> },
-  flows:  { label: 'Fluxos',        sub: 'Sequências automatizadas de mensagens', icon: <GitBranch size={16} /> },
-  config: { label: 'Configurações', sub: 'Parâmetros globais do sistema',         icon: <SlidersHorizontal size={16} /> },
-  logs:   { label: 'Logs',          sub: 'Histórico de atividade em tempo real',  icon: <Activity size={16} /> },
-  setup:  { label: 'Como usar',     sub: 'Documentação e guia de início',         icon: <BookOpen size={16} /> },
+  bots:   { label: 'Bots',          sub: 'Gerencie seus bots do Telegram',                 icon: <Bot              size={16} /> },
+  chats:  { label: 'Chats',         sub: 'Grupos e canais onde seus bots estão presentes', icon: <MessagesSquare   size={16} /> },
+  flows:  { label: 'Fluxos',        sub: 'Sequências automatizadas de mensagens',           icon: <GitBranch        size={16} /> },
+  config: { label: 'Configurações', sub: 'Parâmetros globais do sistema',                  icon: <SlidersHorizontal size={16} /> },
+  logs:   { label: 'Logs',          sub: 'Histórico de atividade em tempo real',            icon: <Activity         size={16} /> },
+  setup:  { label: 'Como usar',     sub: 'Documentação e guia de início',                  icon: <BookOpen         size={16} /> },
 };
 
 async function logout() {
@@ -175,6 +177,7 @@ export default function Home() {
               exit={{ opacity: 0, y: -6, transition: { duration: 0.18 } }}
             >
               {tab === 'bots'   && <BotsPanel   bots={bots} onRefresh={fetchBots} />}
+              {tab === 'chats'  && <ChatsPanel  bots={bots} />}
               {tab === 'flows'  && <FlowsPanel  bots={bots} />}
               {tab === 'config' && <ConfigPanel config={config} onSaved={setConfig} />}
               {tab === 'logs'   && <LogsPanel />}

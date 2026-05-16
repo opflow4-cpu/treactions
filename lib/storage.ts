@@ -1,4 +1,4 @@
-import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog } from './types';
+import { Bot, GlobalConfig, DEFAULT_CONFIG, ReactionLog, BotChat, ChatKind } from './types';
 import { Flow } from './flow-types';
 
 const REACTION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -323,4 +323,61 @@ export async function cancelPendingDownsellsForChat(chatId: number): Promise<voi
   }
 }
 
+// ── Bot Chats ─────────────────────────────────────────────────────────────────
+// Armazena os grupos/canais onde cada bot está presente.
+// Descobertos automaticamente via webhook; status atualizado via refresh manual.
 
+function chatKey(botId: string): string {
+  return `treactions:chats:${botId}`;
+}
+
+export async function getChats(botId: string): Promise<BotChat[]> {
+  try {
+    const raw = await getKV().get<unknown>(chatKey(botId));
+    return toArray<BotChat>(raw);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveChats(botId: string, chats: BotChat[]): Promise<void> {
+  await getKV().set(chatKey(botId), chats);
+}
+
+/** Cria ou atualiza um chat para um bot (chamado pelo webhook a cada mensagem) */
+export async function upsertChat(
+  botId: string,
+  incoming: { chatId: number | string; title: string; type: ChatKind; username?: string },
+): Promise<void> {
+  const chats = await getChats(botId);
+  const idx   = chats.findIndex((c) => String(c.chatId) === String(incoming.chatId));
+
+  if (idx >= 0) {
+    // Atualiza somente os campos que chegam do webhook (preserva role, error, etc.)
+    chats[idx] = {
+      ...chats[idx],
+      title:    incoming.title,
+      type:     incoming.type,
+      username: incoming.username ?? chats[idx].username,
+      lastSeen: Date.now(),
+    };
+  } else {
+    chats.push({
+      chatId:   incoming.chatId,
+      title:    incoming.title,
+      type:     incoming.type,
+      username: incoming.username,
+      botRole:  'unknown',
+      lastSeen: Date.now(),
+    });
+  }
+  await saveChats(botId, chats);
+}
+
+/** Retorna todos os chats de todos os bots num único objeto indexado por botId */
+export async function getAllChats(botIds: string[]): Promise<Record<string, BotChat[]>> {
+  const entries = await Promise.all(
+    botIds.map(async (id) => [id, await getChats(id)] as const),
+  );
+  return Object.fromEntries(entries);
+}

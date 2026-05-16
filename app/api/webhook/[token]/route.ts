@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 30;
 
 import { waitUntil } from '@vercel/functions';
-import { getBots } from '@/lib/storage';
+import { getBots, upsertChat } from '@/lib/storage';
 import { dispatchReactions } from '@/lib/reactions';
 import { handleFlowMessage, handleFlowCallback } from '@/lib/flow-executor';
+import type { ChatKind } from '@/lib/types';
 
 interface TGUser    { id: number; first_name?: string; username?: string }
 interface TGChat    { id: number; title?: string; username?: string; type: string }
@@ -60,6 +61,13 @@ export async function POST(
   waitUntil(
     Promise.all([
       dispatchReactions(chatId, msgId, chatTitle),
+      // Registra/atualiza o chat automaticamente a cada mensagem recebida
+      upsertChat(bot.id, {
+        chatId,
+        title:    chatTitle,
+        type:     (msg.chat.type as ChatKind) ?? 'group',
+        username: msg.chat.username,
+      }).catch(() => {}),
       text ? handleFlowMessage(token, chatId, text).catch((e) => console.error('[webhook] flow error:', e)) : Promise.resolve(),
     ]),
   );

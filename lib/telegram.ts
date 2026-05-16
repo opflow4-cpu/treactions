@@ -1,3 +1,5 @@
+import type { BotRole, ChatKind } from './types';
+
 const TG = 'https://api.telegram.org';
 
 type TGResponse<T = unknown> = { ok: boolean; result?: T; description?: string };
@@ -17,15 +19,63 @@ async function tgPost<T = unknown>(token: string, method: string, body: object):
 
 export async function getMe(
   token: string,
-): Promise<{ ok: boolean; name?: string; username?: string; error?: string }> {
+): Promise<{ ok: boolean; id?: number; name?: string; username?: string; error?: string }> {
   try {
-    const res = await fetch(`${TG}/bot${token}/getMe`);
-    const data = (await res.json()) as TGResponse<{ first_name: string; username: string }>;
+    const res  = await fetch(`${TG}/bot${token}/getMe`);
+    const data = (await res.json()) as TGResponse<{ id: number; first_name: string; username: string }>;
     if (!data.ok) return { ok: false, error: data.description };
-    return { ok: true, name: data.result!.first_name, username: data.result!.username };
+    return { ok: true, id: data.result!.id, name: data.result!.first_name, username: data.result!.username };
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+// ── Chat info ─────────────────────────────────────────────────────────────────
+
+export interface TGChatInfo {
+  ok:            true;
+  title:         string;
+  type:          ChatKind;
+  username?:     string;
+  memberCount?:  number;
+}
+
+export async function getChatInfo(
+  token: string,
+  chatId: number | string,
+): Promise<TGChatInfo | { ok: false; error: string }> {
+  const data = await tgPost<{
+    title?: string; type: string; username?: string; member_count?: number;
+  }>(token, 'getChat', { chat_id: chatId });
+
+  if (!data.ok || !data.result) {
+    return { ok: false, error: data.description ?? 'Erro desconhecido' };
+  }
+
+  const r = data.result;
+  return {
+    ok:          true,
+    title:       r.title ?? String(chatId),
+    type:        (r.type as ChatKind) ?? 'group',
+    username:    r.username,
+    memberCount: r.member_count,
+  };
+}
+
+export async function getChatMemberStatus(
+  token: string,
+  chatId: number | string,
+  userId: number,
+): Promise<{ ok: true; status: BotRole } | { ok: false; error: string }> {
+  const data = await tgPost<{ status: string }>(
+    token, 'getChatMember', { chat_id: chatId, user_id: userId },
+  );
+
+  if (!data.ok || !data.result) {
+    return { ok: false, error: data.description ?? 'Erro desconhecido' };
+  }
+
+  return { ok: true, status: (data.result.status as BotRole) ?? 'unknown' };
 }
 
 export async function setWebhook(

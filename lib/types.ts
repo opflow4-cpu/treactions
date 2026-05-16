@@ -25,6 +25,23 @@ export const DEFAULT_CONFIG: GlobalConfig = {
   useRandomEmoji: true,
 };
 
+// ── Bot Chats ─────────────────────────────────────────────────────────────────
+
+export type BotRole = 'creator' | 'administrator' | 'member' | 'restricted' | 'left' | 'kicked' | 'unknown';
+export type ChatKind = 'group' | 'supergroup' | 'channel' | 'private';
+
+export interface BotChat {
+  chatId:        number | string;
+  title:         string;
+  type:          ChatKind;
+  username?:     string;
+  botRole:       BotRole;
+  memberCount?:  number;
+  lastSeen:      number;   // último update recebido via webhook
+  lastChecked?:  number;   // última vez que chamamos a Telegram API
+  error?:        string;   // "Bot sem acesso ao chat ou chat inválido" etc
+}
+
 // ── Reaction Logs ─────────────────────────────────────────────────────────────
 
 export interface ReactionLog {
